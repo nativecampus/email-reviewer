@@ -10,6 +10,7 @@ from app.database import get_db
 from app.main import app
 from app.models import Email, Rep, Score  # noqa: F401 — registers tables
 from app.models.base import Base
+from tests.fixtures.hubspot import make_hubspot_email, make_hubspot_response
 
 
 @compiles(JSONB, "sqlite")
@@ -117,3 +118,15 @@ def make_score(db):
         return score
 
     return _make
+
+
+@pytest.fixture()
+def hubspot_email_factory():
+    """Factory that builds individual HubSpot API email result objects."""
+    return make_hubspot_email
+
+
+@pytest.fixture()
+def hubspot_response_factory():
+    """Factory that wraps email results in the HubSpot search API envelope."""
+    return make_hubspot_response
