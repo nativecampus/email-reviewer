@@ -1,0 +1,28 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+anthropic = "*"
+requests = "*"
+python-dotenv = "*"
+openpyxl = "*"
+asyncpg = "*"
+fastapi = "*"
+"uvicorn[standard]" = "*"
+jinja2 = "*"
+"sqlalchemy[asyncio]" = "*"
+alembic = "*"
+pydantic-settings = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-cov = "*"
+pytest-env = "*"
+pytest-asyncio = "*"
+httpx = "*"
+aiosqlite = "*"
+
+[requires]
+python_version = "3.12"
