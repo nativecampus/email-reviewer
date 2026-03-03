@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import get_db
 from app.main import app
+from app.models import Email, Rep, Score  # noqa: F401 — registers tables
 from app.models.base import Base
 
 
@@ -68,7 +69,15 @@ async def client(db):
 @pytest.fixture()
 def make_rep(db):
     async def _make(**overrides):
-        raise NotImplementedError("Rep model not yet defined")
+        defaults = {
+            "email": "alice@example.com",
+            "display_name": "Alice Example",
+        }
+        defaults.update(overrides)
+        rep = Rep(**defaults)
+        db.add(rep)
+        await db.flush()
+        return rep
 
     return _make
 
@@ -76,7 +85,16 @@ def make_rep(db):
 @pytest.fixture()
 def make_email(db):
     async def _make(**overrides):
-        raise NotImplementedError("Email model not yet defined")
+        defaults = {
+            "from_email": "rep@example.com",
+            "subject": "Hello",
+            "body_text": "Test body",
+        }
+        defaults.update(overrides)
+        email = Email(**defaults)
+        db.add(email)
+        await db.flush()
+        return email
 
     return _make
 
@@ -84,6 +102,18 @@ def make_email(db):
 @pytest.fixture()
 def make_score(db):
     async def _make(**overrides):
-        raise NotImplementedError("Score model not yet defined")
+        defaults = {
+            "personalisation": 7,
+            "clarity": 8,
+            "value_proposition": 6,
+            "cta": 7,
+            "overall": 7,
+            "notes": "Good email",
+        }
+        defaults.update(overrides)
+        score = Score(**defaults)
+        db.add(score)
+        await db.flush()
+        return score
 
     return _make
