@@ -103,6 +103,16 @@ Routers never set audit fields directly.
 
 Managed by Alembic with async support. The `alembic/env.py` file converts PostgreSQL URLs to use the `asyncpg` driver automatically. Migrations are applied with `alembic upgrade head` and live in `alembic/versions/`.
 
+## Fetcher
+
+`app/services/fetcher.py` ingests outgoing sales emails from the HubSpot CRM v3 search API. The entry point is `fetch_and_store(session, access_token, company_domains, ...)`, which:
+
+1. Calls `fetch_emails_from_hubspot()` to paginate through HubSpot search results with retry logic (exponential backoff on errors, respects `Retry-After` on 429s).
+2. Calls `filter_outgoing_emails()` to keep only emails with direction EMAIL or FORWARDED_EMAIL sent from a company domain.
+3. Calls `upsert_emails_to_db()` to upsert on `hubspot_id` and auto-create Rep records for new sender addresses.
+
+Returns the number of emails stored.
+
 ## Scorer
 
 `app/services/scorer.py` scores unscored emails via the Claude API (claude-sonnet-4-20250514). The entry point is `score_unscored_emails(session, batch_size=5)`, which:
