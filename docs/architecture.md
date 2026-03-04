@@ -127,6 +127,16 @@ Returns the number of emails stored.
 
 `SCORING_SYSTEM_PROMPT` instructs Claude to return a JSON object with five 1-10 scores (personalisation, clarity, value_proposition, cta, overall) and a notes field. Responses are validated through the `ScoringResult` Pydantic model.
 
+## Exporter
+
+`app/services/export.py` generates an Excel workbook from scored email data. The entry point is `export_to_excel(session, output_path)`, which:
+
+1. Queries all emails with a non-error score record.
+2. Writes an "Email Scores" sheet with one row per scored email: rep name, subject, date, five score dimensions, and notes. Score cells are colour-coded by value (green >= 8, yellow >= 6, orange >= 4, red < 4).
+3. Writes a "Rep Averages" sheet with one row per rep: average of each score dimension, sorted by overall average descending.
+
+Both sheets use Arial font, frozen header rows, and auto-filters. Returns the output file path.
+
 ## Key Design Decisions
 
 **Async throughout** - The entire stack is async (FastAPI, SQLAlchemy async sessions, asyncpg). This aligns with the concurrent Claude API calls in the scorer and avoids mixing sync and async database access.
