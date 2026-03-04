@@ -154,6 +154,7 @@ email-reviewer/
 │   │   ├── score.py          # ScoringResult, ScoreCreate, ScoreUpdate, ScoreResponse
 │   │   └── stats.py          # StatsResponse
 │   ├── services/             # Business logic
+│   │   ├── export.py         # Excel export of scores and rep averages
 │   │   ├── fetcher.py        # HubSpot email fetch and upsert
 │   │   └── scorer.py         # Claude API email scoring
 │   ├── static/               # CSS, images
@@ -181,6 +182,7 @@ email-reviewer/
 │   ├── test_enums.py         # Enum values
 │   ├── test_models.py        # Model registration and relationships
 │   ├── test_email_schema.py  # Schema validation
+│   ├── test_export.py        # Export service (Excel output)
 │   └── test_scorer.py        # Scorer service (Claude API mocked)
 ├── .env.example              # Environment variable template
 ├── .github/workflows/main.yml # CI pipeline
