@@ -1,4 +1,5 @@
 import os
+import re
 from logging.config import fileConfig
 
 from alembic import context
@@ -15,6 +16,10 @@ if config.config_file_name is not None:
 
 database_url = os.getenv("DATABASE_URL", "")
 if database_url:
+    # Ensure the URL uses an async driver for create_async_engine.
+    database_url = re.sub(
+        r"^postgresql(\+\w+)?://", "postgresql+asyncpg://", database_url
+    )
     config.set_main_option("sqlalchemy.url", database_url)
 
 target_metadata = Base.metadata
