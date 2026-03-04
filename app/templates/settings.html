@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Settings — Email Reviewer{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Settings Form -->
+    <section>
+        <h1 class="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+        <form id="settings-form" class="space-y-6 bg-white shadow rounded-lg p-6">
+            <div>
+                <label for="global_start_date" class="block text-sm font-medium text-gray-700">Global Start Date</label>
+                <input type="date" id="global_start_date" name="global_start_date"
+                       value="{{ settings.global_start_date }}"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                <p class="mt-1 text-xs text-gray-500">Floor for all fetches. Nothing before this date is fetched from HubSpot.</p>
+            </div>
+
+            <div>
+                <label for="company_domains" class="block text-sm font-medium text-gray-700">Company Domains</label>
+                <textarea id="company_domains" name="company_domains" rows="3"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">{{ settings.company_domains }}</textarea>
+                <p class="mt-1 text-xs text-gray-500">Comma-separated list of domains used to filter outgoing emails.</p>
+            </div>
+
+            <div>
+                <label for="scoring_batch_size" class="block text-sm font-medium text-gray-700">Scoring Batch Size</label>
+                <input type="number" id="scoring_batch_size" name="scoring_batch_size" min="1"
+                       value="{{ settings.scoring_batch_size }}"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                <p class="mt-1 text-xs text-gray-500">Concurrency limit for Claude API calls.</p>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <input type="checkbox" id="auto_score_after_fetch" name="auto_score_after_fetch"
+                       {% if settings.auto_score_after_fetch %}checked{% endif %}
+                       class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <label for="auto_score_after_fetch" class="text-sm font-medium text-gray-700">Auto-score after fetch</label>
+            </div>
+
+            <button type="submit"
+                    class="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                Save Settings
+            </button>
+        </form>
+    </section>
+
+    <!-- Operations Panel -->
+    <section>
+        <h1 class="text-2xl font-bold text-gray-900 mb-6">Operations</h1>
+        <div class="space-y-4 bg-white shadow rounded-lg p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-medium text-gray-900">Fetch Emails</h3>
+                    <p class="text-xs text-gray-500">Fetch from HubSpot and optionally auto-score.</p>
+                </div>
+                <button onclick="startOperation('fetch')"
+                        class="rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700">Fetch</button>
+            </div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-medium text-gray-900">Score Unscored</h3>
+                    <p class="text-xs text-gray-500">Score all emails without a score record.</p>
+                </div>
+                <button onclick="startOperation('score')"
+                        class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Score</button>
+            </div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-medium text-gray-900">Re-score All</h3>
+                    <p class="text-xs text-gray-500">Delete all scores and re-score every email.</p>
+                </div>
+                <button onclick="startOperation('rescore')"
+                        class="rounded-md bg-yellow-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-yellow-700">Re-score</button>
+            </div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-medium text-gray-900">Export</h3>
+                    <p class="text-xs text-gray-500">Generate Excel report.</p>
+                </div>
+                <button onclick="startOperation('export')"
+                        class="rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700">Export</button>
+            </div>
+        </div>
+
+        <!-- Recent Jobs -->
+        <h2 class="text-lg font-semibold text-gray-900 mt-8 mb-4">Recent Jobs</h2>
+        <div id="jobs-list" class="bg-white shadow rounded-lg p-6">
+            <p class="text-sm text-gray-500">Loading...</p>
+        </div>
+    </section>
+</div>
+
+<script>
+async function startOperation(type) {
+    const resp = await fetch(`/api/operations/${type}`, { method: 'POST' });
+    if (resp.ok) {
+        loadJobs();
+    } else {
+        const err = await resp.json();
+        alert(err.detail || 'Operation failed');
+    }
+}
+
+async function loadJobs() {
+    const resp = await fetch('/api/operations/jobs');
+    const jobs = await resp.json();
+    const container = document.getElementById('jobs-list');
+    if (!jobs.length) {
+        container.innerHTML = '<p class="text-sm text-gray-500">No jobs yet.</p>';
+        return;
+    }
+    const statusColors = {
+        PENDING: 'bg-gray-100 text-gray-700',
+        RUNNING: 'bg-blue-100 text-blue-700',
+        COMPLETED: 'bg-green-100 text-green-700',
+        FAILED: 'bg-red-100 text-red-700',
+    };
+    container.innerHTML = jobs.slice(0, 20).map(j => `
+        <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+            <div>
+                <span class="text-sm font-medium text-gray-900">${j.job_type}</span>
+                <span class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[j.status] || ''}">${j.status}</span>
+            </div>
+            <span class="text-xs text-gray-500">${new Date(j.created_at).toLocaleString()}</span>
+        </div>
+    `).join('');
+}
+
+document.getElementById('settings-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = {};
+    data.global_start_date = document.getElementById('global_start_date').value;
+    data.company_domains = document.getElementById('company_domains').value;
+    data.scoring_batch_size = parseInt(document.getElementById('scoring_batch_size').value);
+    data.auto_score_after_fetch = document.getElementById('auto_score_after_fetch').checked;
+    const resp = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (resp.ok) {
+        location.reload();
+    } else {
+        const err = await resp.json();
+        alert(err.detail || 'Save failed');
+    }
+});
+
+loadJobs();
+</script>
+{% endblock %}

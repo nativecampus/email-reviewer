@@ -74,7 +74,7 @@ Seed data files live in `scripts/seeds/`:
 pipenv run uvicorn app.main:app --reload --port 8000
 ```
 
-The `--reload` flag enables auto-restart on file changes. The app is available at `http://localhost:8000`. Dashboard at `/`, health check at `GET /health`, JSON API at `/api/`.
+The `--reload` flag enables auto-restart on file changes. The app is available at `http://localhost:8000`. Dashboard at `/`, settings and operations at `/settings`, health check at `GET /health`, JSON API at `/api/`.
 
 ## Running Tests
 
@@ -130,7 +130,7 @@ The app deploys to Heroku as a single web dyno.
 - **DATABASE_URL**: Provided by Heroku's PostgreSQL addon
 - **Migrations**: Run `heroku run alembic upgrade head` after deploying schema changes
 
-No Docker. No background workers. The fetcher and scorer run as manual CLI commands, not scheduled jobs.
+No Docker. No background workers beyond FastAPI's built-in `BackgroundTasks`. Operations (fetch, score, rescore, export) run as background tasks triggered via the UI or cron hitting the `/api/operations/` endpoints.
 
 ## Project Structure
 
@@ -140,32 +140,41 @@ email-reviewer/
 │   ├── main.py              # FastAPI application entry point
 │   ├── config.py             # pydantic-settings configuration
 │   ├── database.py           # Async engine, session factory, get_db dependency
-│   ├── enums.py              # Enum definitions (EmailDirection)
+│   ├── enums.py              # Enum definitions (EmailDirection, JobType, JobStatus)
 │   ├── models/               # SQLAlchemy ORM models
 │   │   ├── base.py           # DeclarativeBase, AuditMixin, event listeners
 │   │   ├── email.py          # Email model
 │   │   ├── rep.py            # Rep model
-│   │   └── score.py          # Score model
+│   │   ├── score.py          # Score model
+│   │   ├── settings.py       # Settings model (single-row config)
+│   │   └── job.py            # Job model (operation history)
 │   ├── routers/              # HTTP endpoint handlers
 │   │   ├── api.py            # JSON API (/api/reps, /api/emails, /api/stats)
-│   │   └── dashboard.py      # HTML views (/, /reps/{rep_email})
+│   │   ├── dashboard.py      # HTML views (/, /reps/{rep_email})
+│   │   ├── settings.py       # Settings API + HTML (/api/settings, /settings)
+│   │   └── operations.py     # Operations API (/api/operations/*)
 │   ├── schemas/              # Pydantic request/response schemas
 │   │   ├── base.py           # AppBase with from_attributes config
 │   │   ├── email.py          # EmailCreate, EmailUpdate, EmailResponse
 │   │   ├── rep.py            # RepCreate, RepUpdate, RepResponse, RepLeaderboardRow
 │   │   ├── score.py          # ScoringResult, ScoreCreate, ScoreUpdate, ScoreResponse
-│   │   └── stats.py          # StatsResponse
+│   │   ├── stats.py          # StatsResponse
+│   │   ├── settings.py       # SettingsResponse, SettingsUpdate
+│   │   └── job.py            # JobResponse, JobSummaryResponse, LastRunResponse
 │   ├── services/             # Business logic
 │   │   ├── export.py         # Excel export of scores and rep averages
 │   │   ├── fetcher.py        # HubSpot email fetch and upsert
 │   │   ├── rep.py            # Dashboard queries (leaderboard, rep emails, stats)
-│   │   └── scorer.py         # Claude API email scoring
+│   │   ├── scorer.py         # Claude API email scoring
+│   │   ├── settings.py       # Settings CRUD (get_settings, update_settings)
+│   │   └── job_runner.py     # Job execution (fetch, score, rescore, export)
 │   ├── static/               # Static assets
 │   │   └── css/style.css     # Score colour utility classes
 │   ├── templates/            # Jinja2 HTML templates
 │   │   ├── base.html         # Layout with Tailwind CDN and nav
 │   │   ├── leaderboard.html  # Rep leaderboard table
-│   │   └── rep_detail.html   # Rep email list with expandable preview
+│   │   ├── rep_detail.html   # Rep email list with expandable preview
+│   │   └── settings.html     # Settings form + operations panel
 │   └── templating.py         # Shared Jinja2Templates with cache-bust helper
 ├── alembic/                  # Migration configuration and scripts
 │   ├── env.py                # Async Alembic environment
@@ -194,7 +203,10 @@ email-reviewer/
 │   ├── test_dashboard_router.py # HTML dashboard views
 │   ├── test_export.py        # Export service (Excel output)
 │   ├── test_fetcher.py       # Fetcher service (HubSpot API mocked)
-│   └── test_scorer.py        # Scorer service (Claude API mocked)
+│   ├── test_scorer.py        # Scorer service (Claude API mocked)
+│   ├── test_settings_router.py # Settings API endpoints
+│   ├── test_operations_router.py # Operations API endpoints
+│   └── test_job_runner.py    # Job runner service
 ├── .env.example              # Environment variable template
 ├── .github/workflows/main.yml # CI pipeline
 ├── alembic.ini               # Alembic configuration

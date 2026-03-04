@@ -6,7 +6,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.models import Email, Rep, Score  # noqa: F401 — registers tables
+from app.models import Email, Job, Rep, Score, Settings  # noqa: F401 — registers tables
 from app.models.base import Base
 
 config = context.config
