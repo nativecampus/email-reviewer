@@ -1,5 +1,13 @@
 # CLAUDE.md
 
+## Project Documentation
+
+- `docs/architecture.md` - system design, data pipeline, database schema, key decisions
+- `docs/development.md` - setup, seeding, running tests, migrations, CI/CD, deployment, project structure
+- `docs/coding_standards.md` - patterns and conventions for coding agents
+- `docs/testing-guide.md` - what to test, what not to test, stack-specific guidance
+- `docs/visual-testing.md` - Selenium screenshot testing
+
 ## Testing
 
 Read `docs/testing-guide.md` before writing or modifying any test.
