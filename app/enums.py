@@ -8,3 +8,23 @@ class EmailDirection(str, Enum):
 
     def __str__(self) -> str:
         return self.value
+
+
+class JobType(str, Enum):
+    FETCH = "FETCH"
+    SCORE = "SCORE"
+    RESCORE = "RESCORE"
+    EXPORT = "EXPORT"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class JobStatus(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+    def __str__(self) -> str:
+        return self.value

@@ -22,7 +22,7 @@ Dependencies flow strictly left to right.
 
 | Layer | Location | Role |
 |-------|----------|------|
-| Enums | `app/enums.py` | `(str, Enum)` definitions shared by models and schemas. Serialise as plain strings in the database and JSON. |
+| Enums | `app/enums.py` | `(str, Enum)` definitions shared by models and schemas. Serialise as plain strings in the database and JSON. Includes `EmailDirection`, `JobType`, `JobStatus`. |
 | Models | `app/models/` | SQLAlchemy ORM layer. One file per domain entity. All inherit `AuditMixin` and `Base`. |
 | Schemas | `app/schemas/` | Pydantic validation. Three schemas per entity: `Create`, `Update`, `Response`. One file per domain. |
 | Services | `app/services/` | Business logic. Pure functions where possible. Separated from routers. |
@@ -34,7 +34,7 @@ PostgreSQL in production, async SQLite in tests. The async SQLAlchemy engine use
 
 ### Schema
 
-Three tables:
+Five tables:
 
 **emails** - Stores email data fetched from HubSpot.
 
@@ -74,7 +74,30 @@ Three tables:
 | email | String (PK) | Canonical email address |
 | display_name | String | Normalised display name |
 
-All three tables include audit columns (`created_at`, `updated_at`, `created_by`, `updated_by`) via `AuditMixin`.
+**settings** - Single-row application configuration. Seeded on first migration.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | Integer (PK) | Always 1 (enforced by check constraint) |
+| global_start_date | Date | Floor for all fetches. Default 2025-09-01 |
+| company_domains | String | Comma-separated domains for outgoing email filtering |
+| scoring_batch_size | Integer | Concurrency limit for Claude API calls. Default 5 |
+| auto_score_after_fetch | Boolean | When true, fetch also scores unscored emails. Default true |
+
+**jobs** - Operation execution history.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| job_id | Integer (PK) | Auto-increment |
+| job_type | String | FETCH, SCORE, RESCORE, or EXPORT |
+| status | String | PENDING, RUNNING, COMPLETED, or FAILED |
+| started_at | DateTime | Set when status becomes RUNNING |
+| completed_at | DateTime | Set when status becomes COMPLETED or FAILED |
+| result_summary | JSON | Operation-specific results (e.g. fetched count, scored count) |
+| error_message | Text | Error details on FAILED status |
+| triggered_by | String | "cron" or "ui" |
+
+All five tables include audit columns (`created_at`, `updated_at`, `created_by`, `updated_by`) via `AuditMixin`.
 
 ### Relationships
 
@@ -139,7 +162,7 @@ Both sheets use Arial font, frozen header rows, and auto-filters. Returns the ou
 
 ## Dashboard and API
 
-The web UI is served by two routers registered in `app/main.py`.
+The web UI is served by four routers registered in `app/main.py`.
 
 ### HTML Dashboard (`app/routers/dashboard.py`)
 
@@ -150,6 +173,12 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 | `GET /` | Leaderboard page — rep table with colour-coded average scores, links to rep detail |
 | `GET /reps/{rep_email}` | Rep detail page — scored email list with expandable body preview |
 
+### Settings Page (`app/routers/settings.py`)
+
+| Route | View |
+|-------|------|
+| `GET /settings` | Settings form and operations panel (HTML, excluded from OpenAPI) |
+
 ### JSON API (`app/routers/api.py`)
 
 | Route | Response |
@@ -158,6 +187,25 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 | `GET /api/reps/{rep_email}/emails` | Scored emails for one rep, ordered by date descending |
 | `GET /api/emails/{email_id}` | Single email with its score detail |
 | `GET /api/stats` | `StatsResponse` with total_emails, total_scored, total_reps, avg_overall |
+
+### Settings API (`app/routers/settings.py`)
+
+| Route | Response |
+|-------|----------|
+| `GET /api/settings` | Current `SettingsResponse` |
+| `PATCH /api/settings` | Partial update, returns updated `SettingsResponse` |
+
+### Operations API (`app/routers/operations.py`)
+
+| Route | Response |
+|-------|----------|
+| `POST /api/operations/fetch` | 202 with job record. Rejects 409 if a FETCH job is RUNNING. |
+| `POST /api/operations/score` | 202 with job record. Rejects 409 if SCORE or RESCORE is RUNNING. |
+| `POST /api/operations/rescore` | 202 with job record. Rejects 409 if SCORE or RESCORE is RUNNING. |
+| `POST /api/operations/export` | 202 with job record. |
+| `GET /api/operations/jobs` | List of `JobResponse` ordered by created_at desc |
+| `GET /api/operations/jobs/{job_id}` | Single `JobResponse` |
+| `GET /api/operations/last-run` | Most recent completed job per type (or null) |
 
 ### Rep Service (`app/services/rep.py`)
 
@@ -176,6 +224,30 @@ Shared `Jinja2Templates` instance with a `static_url()` global that appends an M
 
 `app/static/css/style.css` provides score colour utility classes (`score-high`, `score-mid`, `score-low`) keyed to score thresholds (>=7 green, >=4 yellow, <4 red). Static files are mounted at `/static`.
 
+## Settings
+
+`app/services/settings.py` manages application configuration stored in a single-row `settings` table. The entry point is `get_settings(session)`, which returns the settings row and creates it with defaults if missing. `update_settings(session, updates)` applies partial updates.
+
+Settings control the behaviour of fetch and score operations:
+
+- `global_start_date` — floor for all HubSpot fetches. The effective start date for a fetch is `max(global_start_date, max_fetched_at_in_db or global_start_date)`.
+- `company_domains` — comma-separated list passed to `filter_outgoing_emails`.
+- `scoring_batch_size` — concurrency limit for the Claude API semaphore.
+- `auto_score_after_fetch` — when true, a fetch operation automatically scores unscored emails on completion.
+
+Validation lives in the `SettingsUpdate` Pydantic schema: `global_start_date` cannot be in the future, `company_domains` cannot be empty, `scoring_batch_size` must be >= 1.
+
+## Job Runner
+
+`app/services/job_runner.py` executes operations as background tasks. Each runner follows the same pattern: set RUNNING with `started_at`, execute, set COMPLETED/FAILED with `completed_at` and `result_summary`/`error_message`. All wrapped in try/except.
+
+- `run_fetch_job(session, job_id)` — reads settings, computes effective start date, calls `fetch_and_store` with company_domains, optionally runs scoring if `auto_score_after_fetch` is true. Result summary includes `fetched`, `new_reps`, and optionally `scored`, `errors`, `tokens`.
+- `run_score_job(session, job_id)` — reads `scoring_batch_size` from settings, calls `score_unscored_emails`. Result summary includes `scored`, `errors`, `tokens`.
+- `run_rescore_job(session, job_id)` — deletes all existing scores, then calls `score_unscored_emails` to score every email.
+- `run_export_job(session, job_id, output_path)` — generates Excel via `export_to_excel`, stores path in result summary.
+
+No FULL_RUN job type. When `auto_score_after_fetch` is true, a FETCH job handles both phases. Cron POSTs to `/api/operations/fetch` and the setting controls the behaviour.
+
 ## Key Design Decisions
 
 **Async throughout** - The entire stack is async (FastAPI, SQLAlchemy async sessions, asyncpg). This aligns with the concurrent Claude API calls in the scorer and avoids mixing sync and async database access.
@@ -188,4 +260,6 @@ Shared `Jinja2Templates` instance with a `static_url()` global that appends an M
 
 **Heroku deployment** - No Docker. The app runs as a single web dyno via Procfile (`uvicorn`). DATABASE_URL comes from Heroku's PostgreSQL addon. This keeps the deployment simple for an internal tool.
 
-**CLI-first workflow** - Fetching and scoring run as CLI commands, not background jobs. The web UI is read-only. This avoids the complexity of task queues for a system that runs on demand.
+**Operations via background tasks** - Fetching, scoring, rescoring, and export run as FastAPI `BackgroundTasks`. Each operation creates a job record (PENDING), then the background task transitions it through RUNNING to COMPLETED or FAILED. Conflict prevention rejects new operations when a conflicting job is already RUNNING (e.g. only one FETCH at a time). Cron hits the same API endpoints as the UI.
+
+**Single-row settings** - Application configuration lives in a `settings` table with a check constraint enforcing `id = 1`. Seeded on the initial migration. Avoids config files and environment variable sprawl for runtime-adjustable values.

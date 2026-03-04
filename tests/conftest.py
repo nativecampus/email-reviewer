@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import get_db
 from app.main import app
-from app.models import Email, Rep, Score  # noqa: F401 — registers tables
+from app.models import Email, Job, Rep, Score, Settings  # noqa: F401 — registers tables
 from app.models.base import Base
 from tests.fixtures.hubspot import make_hubspot_email, make_hubspot_response
 
@@ -41,6 +41,11 @@ TestingSessionLocal = async_sessionmaker(
 async def _setup_db():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Seed default settings row so every test has settings available
+    async with TestingSessionLocal() as session:
+        settings_row = Settings(id=1)
+        session.add(settings_row)
+        await session.commit()
     yield
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -116,6 +121,38 @@ def make_score(db):
         db.add(score)
         await db.flush()
         return score
+
+    return _make
+
+
+@pytest.fixture()
+def make_settings(db):
+    async def _make(**overrides):
+        from sqlalchemy import select as sa_select, update
+
+        if overrides:
+            stmt = update(Settings).where(Settings.id == 1).values(**overrides)
+            await db.execute(stmt)
+            await db.flush()
+        result = await db.execute(sa_select(Settings).where(Settings.id == 1))
+        return result.scalar_one()
+
+    return _make
+
+
+@pytest.fixture()
+def make_job(db):
+    async def _make(**overrides):
+        defaults = {
+            "job_type": "FETCH",
+            "status": "PENDING",
+            "triggered_by": "ui",
+        }
+        defaults.update(overrides)
+        job = Job(**defaults)
+        db.add(job)
+        await db.flush()
+        return job
 
     return _make
 

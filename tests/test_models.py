@@ -8,7 +8,7 @@ from app.models.score import Score
 class TestTableRegistration:
     def test_all_tables_registered(self):
         table_names = set(Base.metadata.tables.keys())
-        assert table_names == {"emails", "scores", "reps"}
+        assert table_names == {"emails", "scores", "reps", "settings", "jobs"}
 
 
 class TestEmailsTableColumns:
