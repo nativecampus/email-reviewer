@@ -182,6 +182,7 @@ email-reviewer/
 ├── docs/                     # Project documentation
 │   ├── architecture.md       # System architecture and design decisions
 │   ├── coding_standards.md   # Patterns and conventions for coding agents
+│   ├── development.md        # Setup, seeding, running tests, CI/CD, deployment
 │   ├── testing-guide.md      # What to test and what not to test
 │   └── visual-testing.md     # Selenium screenshot testing
 ├── scripts/                  # Utility and seed scripts

@@ -509,11 +509,11 @@ The project manual lives in `docs/`. Maintain the following documents:
 
 | Document | Contents |
 |----------|----------|
-| `architecture.md` | Layered structure, configuration, database, audit trail, schema/router patterns, navigation, templates, static assets |
-| `data-model.md` | All models, columns, types, constraints, relationships, ER summary |
-| `api-reference.md` | Every endpoint: method, path, parameters, request/response bodies, error codes |
+| `architecture.md` | Layered structure, configuration, database schema, audit trail, data pipeline, services, API and dashboard routes, key design decisions |
 | `development.md` | Prerequisites, local setup, seeding, running server, running tests, fixture reference, test file organisation, migrations, CI/CD, deployment, project structure |
+| `coding_standards.md` | Patterns and conventions for coding agents |
 | `testing-guide.md` | What to test, what not to test, stack-specific guidance |
+| `visual-testing.md` | Selenium screenshot testing setup and workflow |
 
 When a change affects documented behaviour, update the relevant docs. Review existing documentation in its entirety when adding a new feature - other sections may reference the area you changed.
 

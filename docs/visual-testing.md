@@ -35,7 +35,7 @@ The test suite's SQLite compatibility patches are required. Use `StaticPool` so 
 ```python
 import os
 os.environ["AUTH_ENABLED"] = "FALSE"
-os.environ["SIDP_CURRENT_USER"] = "test"
+os.environ["CURRENT_USER"] = "test"
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.dialects.postgresql import JSONB
@@ -117,8 +117,8 @@ chrome_options.binary_location = "/usr/bin/google-chrome-stable"
 driver = webdriver.Chrome(options=chrome_options)
 
 urls = {
-    "contacts_list": "http://127.0.0.1:8765/contacts/",
-    "contacts_detail": "http://127.0.0.1:8765/contacts/1",
+    "leaderboard": "http://127.0.0.1:8765/",
+    "settings": "http://127.0.0.1:8765/settings",
 }
 
 for name, url in urls.items():
@@ -146,17 +146,17 @@ Key Selenium options:
 Capture the primary keys of seed entities before closing the session used for insertion. SQLAlchemy expires attributes on commit, so accessing `obj.id` after `session.close()` raises `DetachedInstanceError`.
 
 ```python
-contact = Contact(first_name="Jane", ...)
-db.add(contact)
+rep = Rep(email="jane@example.com", display_name="Jane Doe")
+db.add(rep)
 db.commit()
-db.refresh(contact)
+db.refresh(rep)
 
 # Capture before closing
-contact_id = contact.contact_id
+rep_email = rep.email
 db.close()
 
-# Use the captured ID in URLs
-detail_url = f"http://127.0.0.1:8765/contacts/{contact_id}"
+# Use the captured value in URLs
+detail_url = f"http://127.0.0.1:8765/reps/{rep_email}"
 ```
 
 ## Reviewing Screenshots

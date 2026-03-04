@@ -10,7 +10,7 @@ Email Reviewer fetches outgoing sales rep emails from HubSpot, scores each one u
 HubSpot API -> Fetcher -> PostgreSQL -> Scorer (Claude API) -> PostgreSQL -> Web UI
 ```
 
-The pipeline runs in discrete stages via CLI commands. Each stage is idempotent: the fetcher upserts on HubSpot ID and the scorer skips emails that already have a score row.
+The pipeline runs in discrete stages as background tasks triggered via the web UI or API. Each stage is idempotent: the fetcher upserts on HubSpot ID and the scorer skips emails that already have a score row.
 
 ## Layered Architecture
 
@@ -116,6 +116,8 @@ Routers never set audit fields directly.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
+| `APP_NAME` | `Email Reviewer` | Application name |
+| `APP_VERSION` | `0.1.0` | Application version |
 | `DATABASE_URL` | `sqlite+aiosqlite:///email_reviewer.db` | Database connection string |
 | `HUBSPOT_ACCESS_TOKEN` | (empty) | HubSpot API authentication |
 | `ANTHROPIC_API_KEY` | (empty) | Claude API authentication |
