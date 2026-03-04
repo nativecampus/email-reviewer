@@ -24,6 +24,7 @@ pytest-env = "*"
 pytest-asyncio = "*"
 httpx = "*"
 aiosqlite = "*"
+selenium = "*"
 
 [requires]
 python_version = "3.12"

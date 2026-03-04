@@ -5,12 +5,12 @@ outgoing sales emails (direction EMAIL or FORWARDED_EMAIL from a native domain)
 are included - the same filter that the fetcher applies in production.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 EMAILS = [
     {
         "hubspot_id": "440807712958",
-        "timestamp": datetime(2026, 2, 2, 8, 18, 0, tzinfo=timezone.utc),
+        "timestamp": datetime(2026, 2, 2, 8, 18, 0, ),
         "from_name": "Kieran Berry Campbell",
         "from_email": "kieranberrycampbell@nativecampusadvertising.com",
         "to_name": "Acomb Travel",
@@ -21,11 +21,11 @@ EMAILS = [
             "spaces for the upcoming student fair."
         ),
         "direction": "EMAIL",
-        "fetched_at": datetime(2026, 2, 2, 8, 18, 6, tzinfo=timezone.utc),
+        "fetched_at": datetime(2026, 2, 2, 8, 18, 6, ),
     },
     {
         "hubspot_id": "440815170777",
-        "timestamp": datetime(2026, 2, 2, 9, 18, 30, tzinfo=timezone.utc),
+        "timestamp": datetime(2026, 2, 2, 9, 18, 30, ),
         "from_name": "Sheraaz Ahmed",
         "from_email": "sheraazahmed@native.fm",
         "to_name": "Mariah-Louise & Thomas",
@@ -39,11 +39,11 @@ EMAILS = [
             "\r\n\r\nKind Regards"
         ),
         "direction": "EMAIL",
-        "fetched_at": datetime(2026, 2, 2, 9, 18, 33, tzinfo=timezone.utc),
+        "fetched_at": datetime(2026, 2, 2, 9, 18, 33, ),
     },
     {
         "hubspot_id": "440723608775",
-        "timestamp": datetime(2026, 2, 2, 9, 5, 10, tzinfo=timezone.utc),
+        "timestamp": datetime(2026, 2, 2, 9, 5, 10, ),
         "from_name": "Inderpal Gill",
         "from_email": "inderpalgill@nativecampusadvertising.com",
         "to_name": "Caitlin Small",
@@ -56,11 +56,11 @@ EMAILS = [
             " to the event. \n\n\n\nBest, \n\nIndy"
         ),
         "direction": "EMAIL",
-        "fetched_at": datetime(2026, 2, 2, 9, 4, 55, tzinfo=timezone.utc),
+        "fetched_at": datetime(2026, 2, 2, 9, 4, 55, ),
     },
     {
         "hubspot_id": "440903735527",
-        "timestamp": datetime(2026, 2, 2, 12, 0, 6, tzinfo=timezone.utc),
+        "timestamp": datetime(2026, 2, 2, 12, 0, 6, ),
         "from_name": "Inderpal Gill",
         "from_email": "inderpalgill@nativecampusadvertising.com",
         "to_name": None,
@@ -72,11 +72,11 @@ EMAILS = [
             " campus fairs within Edinburgh Napier University."
         ),
         "direction": "EMAIL",
-        "fetched_at": datetime(2026, 2, 2, 11, 1, 50, tzinfo=timezone.utc),
+        "fetched_at": datetime(2026, 2, 2, 11, 1, 50, ),
     },
     {
         "hubspot_id": "441511205111",
-        "timestamp": datetime(2026, 2, 2, 13, 17, 59, tzinfo=timezone.utc),
+        "timestamp": datetime(2026, 2, 2, 13, 17, 59, ),
         "from_name": "Setaita Rokodrava",
         "from_email": "setaitarokodrava@nativecampusadvertising.com",
         "to_name": None,
@@ -90,6 +90,6 @@ EMAILS = [
             " - Campus Advertising - 02039976049"
         ),
         "direction": "EMAIL",
-        "fetched_at": datetime(2026, 2, 2, 13, 17, 50, tzinfo=timezone.utc),
+        "fetched_at": datetime(2026, 2, 2, 13, 17, 50, ),
     },
 ]
