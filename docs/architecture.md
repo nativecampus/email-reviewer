@@ -103,6 +103,20 @@ Routers never set audit fields directly.
 
 Managed by Alembic with async support. The `alembic/env.py` file converts PostgreSQL URLs to use the `asyncpg` driver automatically. Migrations are applied with `alembic upgrade head` and live in `alembic/versions/`.
 
+## Scorer
+
+`app/services/scorer.py` scores unscored emails via the Claude API (claude-sonnet-4-20250514). The entry point is `score_unscored_emails(session, batch_size=5)`, which:
+
+1. Queries emails with no matching score record (LEFT JOIN scores WHERE NULL).
+2. Auto-scores emails with empty or very short bodies (under 20 words) as all 1s without calling Claude. The score notes explain why.
+3. Sends remaining emails to Claude concurrently, capped by an asyncio semaphore (`batch_size`).
+4. Retries once on JSON parse failure. After two consecutive failures, writes a score row with `score_error=True`.
+5. Returns a summary dict with counts (`total_unscored`, `scored`, `auto_scored`, `errors`) and token usage.
+
+`_build_user_message(email)` formats the email's From, To, Subject, Date, and Body fields into a prompt string. Body text is truncated to 4000 characters.
+
+`SCORING_SYSTEM_PROMPT` instructs Claude to return a JSON object with five 1-10 scores (personalisation, clarity, value_proposition, cta, overall) and a notes field. Responses are validated through the `ScoringResult` Pydantic model.
+
 ## Key Design Decisions
 
 **Async throughout** - The entire stack is async (FastAPI, SQLAlchemy async sessions, asyncpg). This aligns with the concurrent Claude API calls in the scorer and avoids mixing sync and async database access.
