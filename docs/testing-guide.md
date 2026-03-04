@@ -1,6 +1,6 @@
 # Testing Guide
 
-This document defines what to test and what not to test in the SIDP codebase. Follow these rules when writing or modifying tests.
+This document defines what to test and what not to test in the Email Reviewer codebase. Follow these rules when writing or modifying tests.
 
 ## Test
 
@@ -21,7 +21,7 @@ This document defines what to test and what not to test in the SIDP codebase. Fo
 - **Trivial code.** Getters, setters, pass-through assignments, constructors with no logic.
 - **External systems in unit tests.** Mock the boundary. Integration tests are separate.
 - **Static markup.** If nothing in your code decides whether or what to render, there's nothing to test.
-- **Styling and layout.** Unit tests are the wrong tool. Use Playwright's screenshot comparison (`expect(page).to_have_screenshot()`) if you need visual regression coverage.
+- **Styling and layout.** Unit tests are the wrong tool. Use Selenium screenshot capture if you need visual regression coverage.
 - **Component composition.** Don't test that Parent renders Child. Test what the user sees.
 - **Snapshots as a default.** They pass on first run, break on every change, and get bulk-updated without review. Exception: tightly scoped snapshots for stable contracts like API schemas are legitimate.
 
@@ -40,7 +40,7 @@ Integration-test your query logic — filters, joins, aggregations — against a
 Test that upgrade then downgrade is reversible and that data survives the round trip. Just running without error proves the SQL is valid, not correct.
 
 ### Jinja2 templates
-Test that your route passes the right context to the template. Asserting key content in rendered output is fine — don't test static markup or visual detail. Use Playwright for anything visual.
+Test that your route passes the right context to the template. Asserting key content in rendered output is fine - don't test static markup or visual detail. Use Selenium for anything visual.
 
 ### Dependency injection
 Override dependencies in tests using `app.dependency_overrides`. Don't mock FastAPI internals.
