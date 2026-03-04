@@ -1,0 +1,14 @@
+.score-high {
+    color: #16a34a;
+    font-weight: 600;
+}
+
+.score-mid {
+    color: #ca8a04;
+    font-weight: 600;
+}
+
+.score-low {
+    color: #dc2626;
+    font-weight: 600;
+}

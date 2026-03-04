@@ -137,6 +137,45 @@ Returns the number of emails stored.
 
 Both sheets use Arial font, frozen header rows, and auto-filters. Returns the output file path.
 
+## Dashboard and API
+
+The web UI is served by two routers registered in `app/main.py`.
+
+### HTML Dashboard (`app/routers/dashboard.py`)
+
+HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendered via Jinja2 templates with Tailwind CSS.
+
+| Route | View |
+|-------|------|
+| `GET /` | Leaderboard page — rep table with colour-coded average scores, links to rep detail |
+| `GET /reps/{rep_email}` | Rep detail page — scored email list with expandable body preview |
+
+### JSON API (`app/routers/api.py`)
+
+| Route | Response |
+|-------|----------|
+| `GET /api/reps` | List of `RepLeaderboardRow` objects sorted by overall avg descending |
+| `GET /api/reps/{rep_email}/emails` | Scored emails for one rep, ordered by date descending |
+| `GET /api/emails/{email_id}` | Single email with its score detail |
+| `GET /api/stats` | `StatsResponse` with total_emails, total_scored, total_reps, avg_overall |
+
+### Rep Service (`app/services/rep.py`)
+
+Async query functions used by both routers:
+
+- `get_leaderboard(session)` — JOINs emails/scores/reps, GROUPs BY rep, computes AVGs, sorts by overall descending
+- `get_rep_emails(session, rep_email)` — scored emails for one rep, ordered by date descending
+- `get_email_detail(session, email_id)` — single email with its score (eager loaded)
+- `get_stats(session)` — summary counts (total_emails, total_scored, total_reps) and avg_overall
+
+### Templating (`app/templating.py`)
+
+Shared `Jinja2Templates` instance with a `static_url()` global that appends an MD5 hash query parameter for cache-busting.
+
+### Static Assets
+
+`app/static/css/style.css` provides score colour utility classes (`score-high`, `score-mid`, `score-low`) keyed to score thresholds (>=7 green, >=4 yellow, <4 red). Static files are mounted at `/static`.
+
 ## Key Design Decisions
 
 **Async throughout** - The entire stack is async (FastAPI, SQLAlchemy async sessions, asyncpg). This aligns with the concurrent Claude API calls in the scorer and avoids mixing sync and async database access.

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard - Email Reviewer{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Leaderboard</h1>
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rep</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Overall</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Personalisation</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clarity</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value Prop</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CTA</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+            {% for row in rows %}
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <a href="/reps/{{ row.email }}" class="text-blue-600 hover:underline">{{ row.display_name }}</a>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap"><span class="{{ score_class(row.avg_overall) }}">{{ "%.1f"|format(row.avg_overall) if row.avg_overall is not none else "—" }}</span></td>
+                <td class="px-6 py-4 whitespace-nowrap"><span class="{{ score_class(row.avg_personalisation) }}">{{ "%.1f"|format(row.avg_personalisation) if row.avg_personalisation is not none else "—" }}</span></td>
+                <td class="px-6 py-4 whitespace-nowrap"><span class="{{ score_class(row.avg_clarity) }}">{{ "%.1f"|format(row.avg_clarity) if row.avg_clarity is not none else "—" }}</span></td>
+                <td class="px-6 py-4 whitespace-nowrap"><span class="{{ score_class(row.avg_value_proposition) }}">{{ "%.1f"|format(row.avg_value_proposition) if row.avg_value_proposition is not none else "—" }}</span></td>
+                <td class="px-6 py-4 whitespace-nowrap"><span class="{{ score_class(row.avg_cta) }}">{{ "%.1f"|format(row.avg_cta) if row.avg_cta is not none else "—" }}</span></td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="px-6 py-4 text-center text-gray-500">No scored reps yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

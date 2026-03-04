@@ -74,7 +74,7 @@ Seed data files live in `scripts/seeds/`:
 pipenv run uvicorn app.main:app --reload --port 8000
 ```
 
-The `--reload` flag enables auto-restart on file changes. The app is available at `http://localhost:8000`. Health check endpoint: `GET /health`.
+The `--reload` flag enables auto-restart on file changes. The app is available at `http://localhost:8000`. Dashboard at `/`, health check at `GET /health`, JSON API at `/api/`.
 
 ## Running Tests
 
@@ -147,6 +147,8 @@ email-reviewer/
 │   │   ├── rep.py            # Rep model
 │   │   └── score.py          # Score model
 │   ├── routers/              # HTTP endpoint handlers
+│   │   ├── api.py            # JSON API (/api/reps, /api/emails, /api/stats)
+│   │   └── dashboard.py      # HTML views (/, /reps/{rep_email})
 │   ├── schemas/              # Pydantic request/response schemas
 │   │   ├── base.py           # AppBase with from_attributes config
 │   │   ├── email.py          # EmailCreate, EmailUpdate, EmailResponse
@@ -156,9 +158,15 @@ email-reviewer/
 │   ├── services/             # Business logic
 │   │   ├── export.py         # Excel export of scores and rep averages
 │   │   ├── fetcher.py        # HubSpot email fetch and upsert
+│   │   ├── rep.py            # Dashboard queries (leaderboard, rep emails, stats)
 │   │   └── scorer.py         # Claude API email scoring
-│   ├── static/               # CSS, images
-│   └── templates/            # Jinja2 templates
+│   ├── static/               # Static assets
+│   │   └── css/style.css     # Score colour utility classes
+│   ├── templates/            # Jinja2 HTML templates
+│   │   ├── base.html         # Layout with Tailwind CDN and nav
+│   │   ├── leaderboard.html  # Rep leaderboard table
+│   │   └── rep_detail.html   # Rep email list with expandable preview
+│   └── templating.py         # Shared Jinja2Templates with cache-bust helper
 ├── alembic/                  # Migration configuration and scripts
 │   ├── env.py                # Async Alembic environment
 │   └── versions/             # Migration files
@@ -182,7 +190,10 @@ email-reviewer/
 │   ├── test_enums.py         # Enum values
 │   ├── test_models.py        # Model registration and relationships
 │   ├── test_email_schema.py  # Schema validation
+│   ├── test_api_router.py    # JSON API endpoints
+│   ├── test_dashboard_router.py # HTML dashboard views
 │   ├── test_export.py        # Export service (Excel output)
+│   ├── test_fetcher.py       # Fetcher service (HubSpot API mocked)
 │   └── test_scorer.py        # Scorer service (Claude API mocked)
 ├── .env.example              # Environment variable template
 ├── .github/workflows/main.yml # CI pipeline
