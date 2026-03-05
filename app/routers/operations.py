@@ -87,7 +87,7 @@ async def start_fetch(
     if queue is not None:
         queue.enqueue(fetch_task, job.job_id, **fetch_kwargs)
     else:
-        background_tasks.add_task(run_fetch_job, session, job.job_id, **fetch_kwargs)
+        background_tasks.add_task(run_fetch_job, None, job.job_id, **fetch_kwargs)
     return job
 
 
@@ -104,7 +104,7 @@ async def start_score(
     if queue is not None:
         queue.enqueue(score_task, job.job_id)
     else:
-        background_tasks.add_task(run_score_job, session, job.job_id)
+        background_tasks.add_task(run_score_job, None, job.job_id)
     return job
 
 
@@ -121,7 +121,7 @@ async def start_rescore(
     if queue is not None:
         queue.enqueue(rescore_task, job.job_id)
     else:
-        background_tasks.add_task(run_rescore_job, session, job.job_id)
+        background_tasks.add_task(run_rescore_job, None, job.job_id)
     return job
 
 
@@ -137,7 +137,7 @@ async def start_export(
     if queue is not None:
         queue.enqueue(export_task, job.job_id)
     else:
-        background_tasks.add_task(run_export_job, session, job.job_id)
+        background_tasks.add_task(run_export_job, None, job.job_id)
     return job
 
 
