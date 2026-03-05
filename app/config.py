@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     CURRENT_USER: str = "system"
     HUBSPOT_ACCESS_TOKEN: str = ""
     ANTHROPIC_API_KEY: str = ""
+    REDIS_URL: str = ""
 
     class Config:
         env_file = ".env"

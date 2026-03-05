@@ -16,6 +16,8 @@ jinja2 = "*"
 "sqlalchemy[asyncio]" = "*"
 alembic = "*"
 pydantic-settings = "*"
+redis = "*"
+rq = "*"
 
 [dev-packages]
 pytest = "*"

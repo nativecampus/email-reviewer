@@ -123,6 +123,7 @@ Routers never set audit fields directly.
 | `ANTHROPIC_API_KEY` | (empty) | Claude API authentication |
 | `AUTH_ENABLED` | `False` | Toggle authentication |
 | `CURRENT_USER` | `system` | Audit trail identity when auth is disabled |
+| `REDIS_URL` | (empty) | Redis connection string for RQ worker queue. When empty, jobs run as FastAPI BackgroundTasks. |
 
 ## Migrations
 
@@ -244,7 +245,9 @@ Validation lives in the `SettingsUpdate` Pydantic schema: `global_start_date` ca
 
 ## Job Runner
 
-`app/services/job_runner.py` executes operations as background tasks. Each runner follows the same pattern: set RUNNING with `started_at`, execute, set COMPLETED/FAILED with `completed_at` and `result_summary`/`error_message`. All wrapped in try/except.
+`app/services/job_runner.py` executes operations as background tasks or RQ worker jobs. Each runner accepts an optional `session` parameter — when `None` (worker process), a new `AsyncSession` is created from `AsyncSessionLocal`. Each runner follows the same pattern: set RUNNING with `started_at`, execute, set COMPLETED/FAILED with `completed_at` and `result_summary`/`error_message`. All wrapped in try/except.
+
+`app/tasks.py` provides synchronous wrapper functions (`fetch_task`, `score_task`, `rescore_task`, `export_task`) for RQ. Each calls `asyncio.run()` on the corresponding async runner with `session=None`, so the runner creates its own session.
 
 - `run_fetch_job(session, job_id, *, fetch_start_date, fetch_end_date, max_count)` — reads settings, computes effective start date (overridden when `fetch_start_date` is provided), calls `fetch_and_store` with company_domains and optional `end_date`/`max_count`, optionally runs scoring if `auto_score_after_fetch` is true. Result summary includes `fetched`, `new_reps`, and optionally `scored`, `errors`, `tokens`.
 - `run_score_job(session, job_id)` — reads `scoring_batch_size` from settings, calls `score_unscored_emails`. Result summary includes `scored`, `errors`, `tokens`.
@@ -263,8 +266,12 @@ No FULL_RUN job type. When `auto_score_after_fetch` is true, a FETCH job handles
 
 **Pydantic validation at the boundary** - Score range validation (1-10) lives in Pydantic schemas, not database constraints. This gives clear error messages at the API layer rather than database-level constraint violations.
 
-**Heroku deployment** - No Docker. The app runs as a single web dyno via Procfile (`uvicorn`). DATABASE_URL comes from Heroku's PostgreSQL addon. This keeps the deployment simple for an internal tool.
+**Heroku deployment** - No Docker. The app runs on Heroku with a web dyno (`uvicorn`) and an optional worker dyno (`rq worker`). DATABASE_URL comes from Heroku's PostgreSQL addon. REDIS_URL comes from a Redis addon (e.g. Heroku Data for Redis).
 
-**Operations via background tasks** - Fetching, scoring, rescoring, and export run as FastAPI `BackgroundTasks`. Each operation creates a job record (PENDING), then the background task transitions it through RUNNING to COMPLETED or FAILED. Conflict prevention rejects new operations when a conflicting job is already RUNNING (e.g. only one FETCH at a time). Cron hits the same API endpoints as the UI.
+**Worker dyno and Redis queue** - When `REDIS_URL` is configured, operations are enqueued to an RQ (Redis Queue) job queue named `email-reviewer`. A separate worker dyno dequeues and runs jobs in their own process, freeing the web dyno from long-running tasks. The worker creates its own async database session via `AsyncSessionLocal`.
+
+**Fallback to BackgroundTasks** - When `REDIS_URL` is empty (local dev, or production without Redis), the operations router falls back to FastAPI `BackgroundTasks`. The same async job runner functions are called in-process. This means the app works without Redis — adding Redis is purely additive.
+
+**Operations lifecycle** - Each operation creates a job record (PENDING), then either enqueues to RQ or adds a BackgroundTask. The job transitions through RUNNING to COMPLETED or FAILED. Conflict prevention rejects new operations when a conflicting job is already RUNNING (e.g. only one FETCH at a time). Cron hits the same API endpoints as the UI.
 
 **Single-row settings** - Application configuration lives in a `settings` table with a check constraint enforcing `id = 1`. Seeded on the initial migration. Avoids config files and environment variable sprawl for runtime-adjustable values.

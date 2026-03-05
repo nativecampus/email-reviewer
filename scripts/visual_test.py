@@ -13,6 +13,7 @@ Captures:
     - Expanded <details> elements showing email body and scorer notes
     - Back-to-team navigation
     - Settings page with form values and operations panel
+    - Settings page with seeded jobs in COMPLETED, FAILED, and RUNNING states
     - Settings page dev mode panel with date pickers and max count filled in
     - Nav bar link navigation between pages
 
@@ -26,10 +27,12 @@ Usage:
     pipenv run python -m scripts.visual_test
 """
 
+import asyncio
 import os
 import subprocess
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 os.environ.setdefault("AUTH_ENABLED", "FALSE")
@@ -85,6 +88,44 @@ def _screenshot(driver, tailwind_css, name):
     path = f"/tmp/{name}.png"
     driver.save_screenshot(path)
     print(f"    saved {path}")
+
+
+def _seed_sample_jobs():
+    """Insert sample jobs in various states for visual testing."""
+    from app.database import AsyncSessionLocal
+    from app.models.job import Job
+
+    async def _insert():
+        async with AsyncSessionLocal() as session:
+            now = datetime.now(timezone.utc)
+            jobs = [
+                Job(
+                    job_type="FETCH",
+                    status="COMPLETED",
+                    triggered_by="ui",
+                    started_at=now.replace(minute=0),
+                    completed_at=now.replace(minute=3),
+                    result_summary={"fetched": 50, "new_reps": 3, "scored": 45, "errors": 0, "tokens": 12500},
+                ),
+                Job(
+                    job_type="SCORE",
+                    status="FAILED",
+                    triggered_by="ui",
+                    started_at=now.replace(minute=5),
+                    completed_at=now.replace(minute=5, second=30),
+                    error_message="Anthropic API error: rate limit exceeded (429). Retry after 60s.",
+                ),
+                Job(
+                    job_type="FETCH",
+                    status="RUNNING",
+                    triggered_by="cron",
+                    started_at=now.replace(minute=10),
+                ),
+            ]
+            session.add_all(jobs)
+            await session.commit()
+
+    asyncio.run(_insert())
 
 
 def _take_screenshots():
@@ -167,8 +208,9 @@ def _take_screenshots():
         time.sleep(0.3)
     _screenshot(driver, tailwind_css, "06_rep_detail_second_expanded")
 
-    # ── 6. Navigate to Settings via nav link ─────────────────────────────
-    print("  6. Click Settings nav link")
+    # ── 6. Seed jobs and navigate to Settings ────────────────────────────
+    print("  6. Seed jobs and click Settings nav link")
+    _seed_sample_jobs()
     driver.find_element(By.LINK_TEXT, "Settings").click()
     time.sleep(2)  # extra time for loadJobs() JS fetch
     _screenshot(driver, tailwind_css, "07_settings")

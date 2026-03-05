@@ -4,6 +4,7 @@ from sqlalchemy import select
 
 from app.enums import JobStatus, JobType
 from app.models.job import Job
+from app.worker import redis_available
 
 
 class TestPostOperations:
@@ -90,6 +91,58 @@ class TestConflictPrevention:
         await db.commit()
         resp = await client.post("/api/operations/score")
         assert resp.status_code == 409
+
+
+class TestJobResponseShape:
+    async def test_jobs_include_result_summary_and_timestamps(
+        self, client, db, make_job
+    ):
+        from datetime import datetime, timezone
+
+        job = await make_job(
+            job_type=JobType.FETCH,
+            status=JobStatus.COMPLETED,
+            started_at=datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc),
+            completed_at=datetime(2025, 1, 1, 12, 5, tzinfo=timezone.utc),
+            result_summary={"fetched": 50, "scored": 45},
+        )
+        await db.commit()
+
+        resp = await client.get("/api/operations/jobs")
+        assert resp.status_code == 200
+        jobs = resp.json()
+        matching = [j for j in jobs if j["job_id"] == job.job_id]
+        assert len(matching) == 1
+        data = matching[0]
+        assert data["result_summary"] == {"fetched": 50, "scored": 45}
+        assert data["started_at"] is not None
+        assert data["completed_at"] is not None
+
+    async def test_failed_jobs_include_error_message(
+        self, client, db, make_job
+    ):
+        job = await make_job(
+            job_type=JobType.SCORE,
+            status=JobStatus.FAILED,
+            error_message="Claude API rate limited",
+        )
+        await db.commit()
+
+        resp = await client.get(f"/api/operations/jobs/{job.job_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["error_message"] == "Claude API rate limited"
+
+
+class TestFallbackToBackgroundTasks:
+    @patch("app.routers.operations.run_fetch_job", new_callable=AsyncMock)
+    async def test_falls_back_to_background_tasks_when_redis_unavailable(
+        self, mock_run, client
+    ):
+        assert not redis_available()
+        resp = await client.post("/api/operations/fetch")
+        assert resp.status_code == 202
+        mock_run.assert_called_once()
 
 
 class TestFetchWithParams:

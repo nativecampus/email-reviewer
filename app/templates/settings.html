@@ -115,7 +115,19 @@
     </section>
 </div>
 
+<style>
+@keyframes pulse-status {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+.status-running {
+    animation: pulse-status 1.5s ease-in-out infinite;
+}
+</style>
+
 <script>
+let pollTimer = null;
+
 async function startOperation(type) {
     const opts = { method: 'POST' };
     if (type === 'fetch') {
@@ -140,12 +152,35 @@ async function startOperation(type) {
     }
 }
 
+function formatDuration(started, completed) {
+    if (!started || !completed) return '';
+    const ms = new Date(completed) - new Date(started);
+    if (ms < 1000) return `${ms}ms`;
+    const secs = Math.round(ms / 1000);
+    if (secs < 60) return `${secs}s`;
+    const mins = Math.floor(secs / 60);
+    const remainSecs = secs % 60;
+    return `${mins}m ${remainSecs}s`;
+}
+
+function formatSummary(summary) {
+    if (!summary) return '';
+    const parts = [];
+    if (summary.fetched != null) parts.push(`Fetched ${summary.fetched} emails`);
+    if (summary.scored != null) parts.push(`scored ${summary.scored}`);
+    if (summary.errors != null && summary.errors > 0) parts.push(`${summary.errors} errors`);
+    if (summary.new_reps != null && summary.new_reps > 0) parts.push(`${summary.new_reps} new reps`);
+    if (summary.output_path) parts.push(`Export: ${summary.output_path}`);
+    return parts.join(', ');
+}
+
 async function loadJobs() {
     const resp = await fetch('/api/operations/jobs');
     const jobs = await resp.json();
     const container = document.getElementById('jobs-list');
     if (!jobs.length) {
         container.innerHTML = '<p class="text-sm text-gray-500">No jobs yet.</p>';
+        stopPolling();
         return;
     }
     const statusColors = {
@@ -154,15 +189,57 @@ async function loadJobs() {
         COMPLETED: 'bg-green-100 text-green-700',
         FAILED: 'bg-red-100 text-red-700',
     };
-    container.innerHTML = jobs.slice(0, 20).map(j => `
-        <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-            <div>
-                <span class="text-sm font-medium text-gray-900">${j.job_type}</span>
-                <span class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[j.status] || ''}">${j.status}</span>
-            </div>
-            <span class="text-xs text-gray-500">${new Date(j.created_at).toLocaleString()}</span>
-        </div>
-    `).join('');
+    const hasActive = jobs.some(j => j.status === 'PENDING' || j.status === 'RUNNING');
+
+    container.innerHTML = jobs.slice(0, 20).map(j => {
+        const statusClass = statusColors[j.status] || '';
+        const pulseClass = j.status === 'RUNNING' ? 'status-running' : '';
+        const duration = formatDuration(j.started_at, j.completed_at);
+        const summary = formatSummary(j.result_summary);
+        const hasError = j.status === 'FAILED' && j.error_message;
+
+        let html = `<div class="py-2 border-b border-gray-100 last:border-0">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-gray-900">${j.job_type}</span>
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusClass} ${pulseClass}">${j.status}</span>
+                    ${duration ? `<span class="text-xs text-gray-400">${duration}</span>` : ''}
+                </div>
+                <span class="text-xs text-gray-500">${new Date(j.created_at).toLocaleString()}</span>
+            </div>`;
+
+        if (summary) {
+            html += `<p class="mt-1 text-xs text-gray-600">${summary}</p>`;
+        }
+
+        if (hasError) {
+            html += `<details class="mt-1">
+                <summary class="text-xs text-red-600 cursor-pointer hover:text-red-800">Show error</summary>
+                <pre class="mt-1 text-xs text-red-700 bg-red-50 rounded p-2 whitespace-pre-wrap">${j.error_message}</pre>
+            </details>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }).join('');
+
+    if (hasActive) {
+        startPolling();
+    } else {
+        stopPolling();
+    }
+}
+
+function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(loadJobs, 3000);
+}
+
+function stopPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
 }
 
 document.getElementById('settings-form').addEventListener('submit', async (e) => {

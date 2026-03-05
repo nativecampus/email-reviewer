@@ -31,6 +31,7 @@ Required variables:
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude scoring |
 | `AUTH_ENABLED` | Set to `FALSE` for local development |
 | `CURRENT_USER` | Username recorded in audit columns (e.g. your name) |
+| `REDIS_URL` | Optional. Redis connection string (e.g. `redis://localhost:6379`). When set, operations run on a separate RQ worker. Leave empty for local dev to use in-process BackgroundTasks. |
 
 3. Create the database and run migrations:
 
@@ -124,15 +125,46 @@ GitHub Actions runs on every push and pull request to `main`. The workflow (`.gi
 
 The CI database URL is set to the PostgreSQL service container. Tests themselves use in-memory SQLite regardless of this variable (overridden in `pytest.ini`).
 
+## Redis and Worker Dyno (Optional)
+
+The app works without Redis. When `REDIS_URL` is empty, operations run as in-process FastAPI `BackgroundTasks`.
+
+To run operations on a separate worker process:
+
+1. Install and start Redis locally:
+
+```bash
+# macOS
+brew install redis && brew services start redis
+
+# Ubuntu/Debian
+sudo apt install redis-server && sudo systemctl start redis
+```
+
+2. Set `REDIS_URL` in `.env`:
+
+```
+REDIS_URL=redis://localhost:6379
+```
+
+3. Start the RQ worker in a separate terminal:
+
+```bash
+pipenv run rq worker --url redis://localhost:6379 email-reviewer
+```
+
+The worker picks up enqueued jobs from the `email-reviewer` queue and runs them in their own process with a fresh database session.
+
 ## Deployment
 
-The app deploys to Heroku as a single web dyno.
+The app deploys to Heroku with a web dyno and an optional worker dyno.
 
-- **Procfile**: `web: uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- **Procfile**: `web: uvicorn ...` and `worker: rq worker --url $REDIS_URL email-reviewer`
 - **DATABASE_URL**: Provided by Heroku's PostgreSQL addon
+- **REDIS_URL**: Provided by a Redis addon (e.g. Heroku Data for Redis). Optional — the app falls back to in-process BackgroundTasks when not set.
 - **Migrations**: Run `heroku run alembic upgrade head` after deploying schema changes
 
-No Docker. No background workers beyond FastAPI's built-in `BackgroundTasks`. Operations (fetch, score, rescore, export) run as background tasks triggered via the UI or cron hitting the `/api/operations/` endpoints.
+To enable the worker dyno: `heroku ps:scale worker=1`. Without it (or without `REDIS_URL`), operations run in-process on the web dyno.
 
 ## Project Structure
 
@@ -143,6 +175,8 @@ email-reviewer/
 │   ├── config.py             # pydantic-settings configuration
 │   ├── database.py           # Async engine, session factory, get_db dependency
 │   ├── enums.py              # Enum definitions (EmailDirection, JobType, JobStatus)
+│   ├── worker.py             # Redis connection factory and RQ queue helpers
+│   ├── tasks.py              # Synchronous RQ task wrappers (fetch, score, rescore, export)
 │   ├── models/               # SQLAlchemy ORM models
 │   │   ├── base.py           # DeclarativeBase, AuditMixin, event listeners
 │   │   ├── email.py          # Email model

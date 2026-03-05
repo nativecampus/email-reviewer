@@ -14,6 +14,7 @@ def _async_database_url(url: str) -> str:
 
 engine = create_async_engine(_async_database_url(settings.DATABASE_URL))
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+AsyncSessionLocal = async_session
 
 
 async def get_db():

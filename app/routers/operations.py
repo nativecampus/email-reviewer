@@ -14,6 +14,8 @@ from app.services.job_runner import (
     run_rescore_job,
     run_score_job,
 )
+from app.tasks import export_task, fetch_task, rescore_task, score_task
+from app.worker import get_queue
 
 router = APIRouter(prefix="/api/operations")
 
@@ -69,7 +71,12 @@ async def start_fetch(
             fetch_kwargs["max_count"] = body.max_count
 
     await session.commit()
-    background_tasks.add_task(run_fetch_job, session, job.job_id, **fetch_kwargs)
+
+    queue = get_queue()
+    if queue is not None:
+        queue.enqueue(fetch_task, job.job_id, **fetch_kwargs)
+    else:
+        background_tasks.add_task(run_fetch_job, session, job.job_id, **fetch_kwargs)
     return job
 
 
@@ -81,7 +88,12 @@ async def start_score(
     await _check_no_running(session, [JobType.SCORE, JobType.RESCORE])
     job = await _create_job(session, JobType.SCORE)
     await session.commit()
-    background_tasks.add_task(run_score_job, session, job.job_id)
+
+    queue = get_queue()
+    if queue is not None:
+        queue.enqueue(score_task, job.job_id)
+    else:
+        background_tasks.add_task(run_score_job, session, job.job_id)
     return job
 
 
@@ -93,7 +105,12 @@ async def start_rescore(
     await _check_no_running(session, [JobType.SCORE, JobType.RESCORE])
     job = await _create_job(session, JobType.RESCORE)
     await session.commit()
-    background_tasks.add_task(run_rescore_job, session, job.job_id)
+
+    queue = get_queue()
+    if queue is not None:
+        queue.enqueue(rescore_task, job.job_id)
+    else:
+        background_tasks.add_task(run_rescore_job, session, job.job_id)
     return job
 
 
@@ -104,7 +121,12 @@ async def start_export(
 ):
     job = await _create_job(session, JobType.EXPORT)
     await session.commit()
-    background_tasks.add_task(run_export_job, session, job.job_id)
+
+    queue = get_queue()
+    if queue is not None:
+        queue.enqueue(export_task, job.job_id)
+    else:
+        background_tasks.add_task(run_export_job, session, job.job_id)
     return job
 
 
