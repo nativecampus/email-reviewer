@@ -1,3 +1,5 @@
+import math
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -5,9 +7,25 @@ from sqlalchemy.orm import joinedload
 from app.models import Email, Rep, Score
 
 
-async def get_team(session: AsyncSession):
+def _paginate_result(items, total: int, page: int, per_page: int | None):
+    if per_page:
+        pages = math.ceil(total / per_page)
+    else:
+        pages = 1
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": pages,
+    }
+
+
+async def get_team(
+    session: AsyncSession, *, page: int = 1, per_page: int | None = 20
+):
     """JOIN emails/scores/reps, GROUP BY rep, compute AVGs, sort by overall desc."""
-    stmt = (
+    base = (
         select(
             Rep.email,
             Rep.display_name,
@@ -22,12 +40,28 @@ async def get_team(session: AsyncSession):
         .group_by(Rep.email, Rep.display_name)
         .order_by(func.avg(Score.overall).desc())
     )
-    result = await session.execute(stmt)
-    return result.all()
+
+    count_stmt = select(func.count()).select_from(base.subquery())
+    total = (await session.execute(count_stmt)).scalar() or 0
+
+    if per_page:
+        base = base.offset((page - 1) * per_page).limit(per_page)
+
+    result = await session.execute(base)
+    return _paginate_result(result.all(), total, page, per_page)
 
 
-async def get_rep_emails(session: AsyncSession, rep_email: str):
+async def get_rep_emails(
+    session: AsyncSession, rep_email: str, *, page: int = 1, per_page: int | None = 20
+):
     """Scored emails for one rep, ordered by date desc."""
+    count_stmt = (
+        select(func.count(Email.id))
+        .join(Score, Score.email_id == Email.id)
+        .where(Email.from_email == rep_email)
+    )
+    total = (await session.execute(count_stmt)).scalar() or 0
+
     stmt = (
         select(Email)
         .join(Score, Score.email_id == Email.id)
@@ -35,8 +69,13 @@ async def get_rep_emails(session: AsyncSession, rep_email: str):
         .options(joinedload(Email.score))
         .order_by(Email.timestamp.desc())
     )
+
+    if per_page:
+        stmt = stmt.offset((page - 1) * per_page).limit(per_page)
+
     result = await session.execute(stmt)
-    return result.scalars().unique().all()
+    items = result.scalars().unique().all()
+    return _paginate_result(list(items), total, page, per_page)
 
 
 async def get_email_detail(session: AsyncSession, email_id: int):

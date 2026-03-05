@@ -1,0 +1,39 @@
+{% if total > 0 %}
+<div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-600" id="pagination">
+    <div>
+        {% if per_page %}
+        Showing {{ start }}-{{ end }} of {{ total }}
+        {% else %}
+        Showing all {{ total }}
+        {% endif %}
+    </div>
+
+    <div class="flex items-center gap-2">
+        <span class="mr-1">Per page:</span>
+        {% for size in [20, 50, 100] %}
+        <a href="?page=1&per_page={{ size }}"
+           class="px-2 py-1 rounded {{ 'bg-blue-600 text-white' if per_page == size else 'bg-gray-200 hover:bg-gray-300' }}">{{ size }}</a>
+        {% endfor %}
+        <a href="?page=1&per_page=0"
+           class="px-2 py-1 rounded {{ 'bg-blue-600 text-white' if per_page == 0 else 'bg-gray-200 hover:bg-gray-300' }}">All</a>
+    </div>
+
+    {% if per_page and pages > 1 %}
+    <div class="flex items-center gap-2">
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}&per_page={{ per_page }}" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">&laquo; Previous</a>
+        {% else %}
+        <span class="px-3 py-1 rounded bg-gray-100 text-gray-400">&laquo; Previous</span>
+        {% endif %}
+
+        <span>Page {{ page }} of {{ pages }}</span>
+
+        {% if page < pages %}
+        <a href="?page={{ page + 1 }}&per_page={{ per_page }}" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">Next &raquo;</a>
+        {% else %}
+        <span class="px-3 py-1 rounded bg-gray-100 text-gray-400">Next &raquo;</span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
