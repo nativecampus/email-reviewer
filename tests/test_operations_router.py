@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.enums import JobStatus, JobType
 from app.models.job import Job
 from app.worker import redis_available
+from tests.conftest import TestingSessionLocal
 
 
 class TestPostOperations:
@@ -238,3 +239,85 @@ class TestFetchWithParams:
         assert kwargs["fetch_start_date"].isoformat() == "2024-01-01"
         assert kwargs["fetch_end_date"].isoformat() == "2024-01-31"
         assert kwargs["max_count"] == 50
+
+
+class TestJobExecutionIntegration:
+    """End-to-end tests that let the job runner actually execute via BackgroundTasks.
+
+    No mocking of the job runner itself — only external services (HubSpot, Claude)
+    are mocked. Verifies the full path: endpoint → BackgroundTasks → _session_scope(None)
+    → job runner → commit.
+    """
+
+    @patch("app.services.job_runner.fetch_and_store", new_callable=AsyncMock, return_value=3)
+    @patch("app.services.job_runner.AsyncSessionLocal", TestingSessionLocal)
+    async def test_fetch_job_completes_via_background_task(self, mock_fetch, client, db):
+        await db.execute(
+            select(Job)  # ensure settings seeded
+        )
+        resp = await client.post("/api/operations/fetch")
+        assert resp.status_code == 202
+        job_id = resp.json()["job_id"]
+
+        result = await db.execute(select(Job).where(Job.job_id == job_id))
+        job = result.scalar_one()
+        assert job.status == JobStatus.COMPLETED
+        assert job.result_summary["fetched"] == 3
+        assert job.started_at is not None
+        assert job.completed_at is not None
+
+    @patch("app.services.job_runner.score_unscored_emails", new_callable=AsyncMock)
+    @patch("app.services.job_runner.AsyncSessionLocal", TestingSessionLocal)
+    async def test_score_job_completes_via_background_task(self, mock_score, client, db):
+        mock_score.return_value = {
+            "scored": 5, "auto_scored": 0, "errors": 0,
+            "total_input_tokens": 100, "total_output_tokens": 50,
+        }
+        resp = await client.post("/api/operations/score")
+        assert resp.status_code == 202
+        job_id = resp.json()["job_id"]
+
+        result = await db.execute(select(Job).where(Job.job_id == job_id))
+        job = result.scalar_one()
+        assert job.status == JobStatus.COMPLETED
+        assert job.result_summary["scored"] == 5
+
+    @patch("app.services.job_runner.export_to_excel", new_callable=AsyncMock, return_value="/tmp/export.xlsx")
+    @patch("app.services.job_runner.AsyncSessionLocal", TestingSessionLocal)
+    async def test_export_job_completes_via_background_task(self, mock_export, client, db):
+        resp = await client.post("/api/operations/export")
+        assert resp.status_code == 202
+        job_id = resp.json()["job_id"]
+
+        result = await db.execute(select(Job).where(Job.job_id == job_id))
+        job = result.scalar_one()
+        assert job.status == JobStatus.COMPLETED
+        assert job.result_summary["output_path"] == "/tmp/export.xlsx"
+
+    @patch("app.services.job_runner.fetch_and_store", new_callable=AsyncMock)
+    @patch("app.services.job_runner.AsyncSessionLocal", TestingSessionLocal)
+    async def test_failed_job_persists_error_via_background_task(self, mock_fetch, client, db):
+        mock_fetch.side_effect = RuntimeError("HubSpot API key invalid")
+        resp = await client.post("/api/operations/fetch")
+        assert resp.status_code == 202
+        job_id = resp.json()["job_id"]
+
+        result = await db.execute(select(Job).where(Job.job_id == job_id))
+        job = result.scalar_one()
+        assert job.status == JobStatus.FAILED
+        assert "HubSpot API key invalid" in job.error_message
+
+    @patch("app.services.job_runner.score_unscored_emails", new_callable=AsyncMock)
+    @patch("app.services.job_runner.AsyncSessionLocal", TestingSessionLocal)
+    async def test_rescore_job_completes_via_background_task(self, mock_score, client, db):
+        mock_score.return_value = {
+            "scored": 2, "auto_scored": 0, "errors": 0,
+            "total_input_tokens": 0, "total_output_tokens": 0,
+        }
+        resp = await client.post("/api/operations/rescore")
+        assert resp.status_code == 202
+        job_id = resp.json()["job_id"]
+
+        result = await db.execute(select(Job).where(Job.job_id == job_id))
+        job = result.scalar_one()
+        assert job.status == JobStatus.COMPLETED
