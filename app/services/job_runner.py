@@ -22,12 +22,18 @@ from app.services.settings import get_settings
 
 @asynccontextmanager
 async def _session_scope(session: Optional[AsyncSession] = None):
-    """Yield the provided session or create a new one from AsyncSessionLocal."""
+    """Yield the provided session or create a new one, committing on exit.
+
+    Job runners catch their own exceptions and persist failure state via flush(),
+    so commit is always appropriate when the context manager exits normally.
+    """
     if session is not None:
         yield session
+        await session.commit()
     else:
         async with AsyncSessionLocal() as new_session:
             yield new_session
+            await new_session.commit()
 
 
 def _set_running(job: Job) -> None:

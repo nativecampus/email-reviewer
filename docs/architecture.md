@@ -270,7 +270,9 @@ No FULL_RUN job type. When `auto_score_after_fetch` is true, a FETCH job handles
 
 **Worker dyno and Redis queue** - When `REDIS_URL` is configured, operations are enqueued to an RQ (Redis Queue) job queue named `email-reviewer`. A separate worker dyno dequeues and runs jobs in their own process, freeing the web dyno from long-running tasks. The worker creates its own async database session via `AsyncSessionLocal`.
 
-**Fallback to BackgroundTasks** - When `REDIS_URL` is empty (local dev, or production without Redis), the operations router falls back to FastAPI `BackgroundTasks`. The same async job runner functions are called in-process. This means the app works without Redis — adding Redis is purely additive.
+**Fallback to BackgroundTasks** - When `REDIS_URL` is empty (local dev, or production without Redis), the operations router falls back to FastAPI `BackgroundTasks`. The same async job runner functions are called in-process. This means the app works without Redis - adding Redis is purely additive.
+
+**Redis health validation** - When `REDIS_URL` is configured, the operations router validates Redis connectivity and worker availability before creating a job record. If Redis is unreachable or no workers are listening on the `email-reviewer` queue, the API returns 503 with a diagnostic message. Validation runs before the job is committed to the database, preventing orphaned PENDING records.
 
 **Operations lifecycle** - Each operation creates a job record (PENDING), then either enqueues to RQ or adds a BackgroundTask. The job transitions through RUNNING to COMPLETED or FAILED. Conflict prevention rejects new operations when a conflicting job is already RUNNING (e.g. only one FETCH at a time). Cron hits the same API endpoints as the UI.
 

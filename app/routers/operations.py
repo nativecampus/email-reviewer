@@ -15,7 +15,7 @@ from app.services.job_runner import (
     run_score_job,
 )
 from app.tasks import export_task, fetch_task, rescore_task, score_task
-from app.worker import get_queue
+from app.worker import get_queue, validate_redis
 
 router = APIRouter(prefix="/api/operations")
 
@@ -46,12 +46,24 @@ async def _create_job(
     return job
 
 
+def _validate_queue():
+    """Return the RQ Queue if Redis is configured, or None for BackgroundTasks fallback.
+
+    Raises 503 if Redis is configured but unhealthy (unreachable or no workers).
+    """
+    error = validate_redis()
+    if error:
+        raise HTTPException(status_code=503, detail=error)
+    return get_queue()
+
+
 @router.post("/fetch", status_code=202, response_model=JobResponse)
 async def start_fetch(
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
     body: Optional[FetchRequest] = Body(default=None),
 ):
+    queue = _validate_queue()
     await _check_no_running(session, [JobType.FETCH])
     job = await _create_job(session, JobType.FETCH)
 
@@ -72,11 +84,10 @@ async def start_fetch(
 
     await session.commit()
 
-    queue = get_queue()
     if queue is not None:
         queue.enqueue(fetch_task, job.job_id, **fetch_kwargs)
     else:
-        background_tasks.add_task(run_fetch_job, session, job.job_id, **fetch_kwargs)
+        background_tasks.add_task(run_fetch_job, None, job.job_id, **fetch_kwargs)
     return job
 
 
@@ -85,15 +96,15 @@ async def start_score(
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
 ):
+    queue = _validate_queue()
     await _check_no_running(session, [JobType.SCORE, JobType.RESCORE])
     job = await _create_job(session, JobType.SCORE)
     await session.commit()
 
-    queue = get_queue()
     if queue is not None:
         queue.enqueue(score_task, job.job_id)
     else:
-        background_tasks.add_task(run_score_job, session, job.job_id)
+        background_tasks.add_task(run_score_job, None, job.job_id)
     return job
 
 
@@ -102,15 +113,15 @@ async def start_rescore(
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
 ):
+    queue = _validate_queue()
     await _check_no_running(session, [JobType.SCORE, JobType.RESCORE])
     job = await _create_job(session, JobType.RESCORE)
     await session.commit()
 
-    queue = get_queue()
     if queue is not None:
         queue.enqueue(rescore_task, job.job_id)
     else:
-        background_tasks.add_task(run_rescore_job, session, job.job_id)
+        background_tasks.add_task(run_rescore_job, None, job.job_id)
     return job
 
 
@@ -119,14 +130,14 @@ async def start_export(
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
 ):
+    queue = _validate_queue()
     job = await _create_job(session, JobType.EXPORT)
     await session.commit()
 
-    queue = get_queue()
     if queue is not None:
         queue.enqueue(export_task, job.job_id)
     else:
-        background_tasks.add_task(run_export_job, session, job.job_id)
+        background_tasks.add_task(run_export_job, None, job.job_id)
     return job
 
 

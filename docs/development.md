@@ -125,11 +125,17 @@ GitHub Actions runs on every push and pull request to `main`. The workflow (`.gi
 
 The CI database URL is set to the PostgreSQL service container. Tests themselves use in-memory SQLite regardless of this variable (overridden in `pytest.ini`).
 
-## Redis and Worker Dyno (Optional)
+## Background Jobs
 
-The app works without Redis. When `REDIS_URL` is empty, operations run as in-process FastAPI `BackgroundTasks`.
+Operations (fetch, score, rescore, export) run as background jobs. The app supports two modes:
 
-To run operations on a separate worker process:
+### Default: In-Process (No Redis)
+
+When `REDIS_URL` is empty or not set, jobs run in-process as FastAPI `BackgroundTasks`. No additional setup is needed - triggering an operation from the settings page or API runs it in the same process as the web server. This is the default for local development.
+
+### Optional: Redis + Worker
+
+For production or to offload jobs from the web process, configure Redis and an RQ worker:
 
 1. Install and start Redis locally:
 
@@ -154,6 +160,8 @@ pipenv run rq worker --url redis://localhost:6379 email-reviewer
 ```
 
 The worker picks up enqueued jobs from the `email-reviewer` queue and runs them in their own process with a fresh database session.
+
+When `REDIS_URL` is set, the app validates that Redis is reachable and at least one worker is listening on the queue before accepting operations. If either check fails, the API returns 503 with a message explaining the problem. This prevents jobs from being created that can never complete.
 
 ## Deployment
 
