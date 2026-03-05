@@ -18,6 +18,7 @@ def fetch_task(
     fetch_start_date: Optional[date] = None,
     fetch_end_date: Optional[date] = None,
     max_count: Optional[int] = None,
+    auto_score: Optional[bool] = None,
 ) -> None:
     """RQ-compatible synchronous wrapper for run_fetch_job."""
     asyncio.run(
@@ -27,6 +28,7 @@ def fetch_task(
             fetch_start_date=fetch_start_date,
             fetch_end_date=fetch_end_date,
             max_count=max_count,
+            auto_score=auto_score,
         )
     )
 

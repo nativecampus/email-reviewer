@@ -73,6 +73,7 @@ async def start_fetch(
             "start_date": body.start_date.isoformat() if body.start_date else None,
             "end_date": body.end_date.isoformat() if body.end_date else None,
             "max_count": body.max_count,
+            "auto_score": body.auto_score,
         }
         job.result_summary = {"params": params}
         if body.start_date:
@@ -81,6 +82,8 @@ async def start_fetch(
             fetch_kwargs["fetch_end_date"] = body.end_date
         if body.max_count is not None:
             fetch_kwargs["max_count"] = body.max_count
+        if body.auto_score is not None:
+            fetch_kwargs["auto_score"] = body.auto_score
 
     await session.commit()
 

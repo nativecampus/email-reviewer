@@ -215,6 +215,61 @@ class TestRunFetchJob:
         assert "HubSpot down" in updated.error_message
 
 
+class TestRunFetchJobAutoScoreOverride:
+    @patch("app.services.job_runner.score_unscored_emails", new_callable=AsyncMock)
+    @patch("app.services.job_runner.fetch_and_store", new_callable=AsyncMock, return_value=2)
+    async def test_auto_score_true_overrides_setting_false(
+        self, mock_fetch, mock_score, db, make_job, make_settings
+    ):
+        mock_score.return_value = {
+            "scored": 2, "auto_scored": 0, "errors": 0,
+            "total_input_tokens": 100, "total_output_tokens": 50,
+        }
+        await make_settings(auto_score_after_fetch=False)
+        job = await make_job(job_type=JobType.FETCH)
+        await db.commit()
+
+        from app.services.job_runner import run_fetch_job
+
+        await run_fetch_job(db, job.job_id, auto_score=True)
+
+        mock_score.assert_called_once()
+
+    @patch("app.services.job_runner.score_unscored_emails", new_callable=AsyncMock)
+    @patch("app.services.job_runner.fetch_and_store", new_callable=AsyncMock, return_value=2)
+    async def test_auto_score_false_overrides_setting_true(
+        self, mock_fetch, mock_score, db, make_job, make_settings
+    ):
+        await make_settings(auto_score_after_fetch=True)
+        job = await make_job(job_type=JobType.FETCH)
+        await db.commit()
+
+        from app.services.job_runner import run_fetch_job
+
+        await run_fetch_job(db, job.job_id, auto_score=False)
+
+        mock_score.assert_not_called()
+
+    @patch("app.services.job_runner.score_unscored_emails", new_callable=AsyncMock)
+    @patch("app.services.job_runner.fetch_and_store", new_callable=AsyncMock, return_value=2)
+    async def test_auto_score_none_falls_back_to_setting(
+        self, mock_fetch, mock_score, db, make_job, make_settings
+    ):
+        mock_score.return_value = {
+            "scored": 2, "auto_scored": 0, "errors": 0,
+            "total_input_tokens": 0, "total_output_tokens": 0,
+        }
+        await make_settings(auto_score_after_fetch=True)
+        job = await make_job(job_type=JobType.FETCH)
+        await db.commit()
+
+        from app.services.job_runner import run_fetch_job
+
+        await run_fetch_job(db, job.job_id, auto_score=None)
+
+        mock_score.assert_called_once()
+
+
 class TestRunFetchJobWithParams:
     @patch("app.services.job_runner.fetch_and_store", new_callable=AsyncMock, return_value=3)
     async def test_explicit_start_date_overrides_computed(

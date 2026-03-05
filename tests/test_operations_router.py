@@ -240,6 +240,33 @@ class TestFetchWithParams:
         assert kwargs["fetch_end_date"].isoformat() == "2024-01-31"
         assert kwargs["max_count"] == 50
 
+    @patch("app.routers.operations.run_fetch_job", new_callable=AsyncMock)
+    async def test_fetch_passes_auto_score_to_run_fetch_job(self, mock_run, client):
+        await client.post(
+            "/api/operations/fetch",
+            json={"auto_score": False},
+        )
+        _, kwargs = mock_run.call_args
+        assert kwargs["auto_score"] is False
+
+    @patch("app.routers.operations.run_fetch_job", new_callable=AsyncMock)
+    async def test_fetch_auto_score_stored_in_params(self, mock_run, client, db):
+        resp = await client.post(
+            "/api/operations/fetch",
+            json={"auto_score": True},
+        )
+        job_id = resp.json()["job_id"]
+
+        result = await db.execute(select(Job).where(Job.job_id == job_id))
+        job = result.scalar_one()
+        assert job.result_summary["params"]["auto_score"] is True
+
+    @patch("app.routers.operations.run_fetch_job", new_callable=AsyncMock)
+    async def test_fetch_without_auto_score_does_not_pass_kwarg(self, mock_run, client):
+        await client.post("/api/operations/fetch")
+        _, kwargs = mock_run.call_args
+        assert "auto_score" not in kwargs
+
 
 class TestJobExecutionIntegration:
     """End-to-end tests that let the job runner actually execute via BackgroundTasks.

@@ -147,7 +147,7 @@ Returns the number of emails stored.
 1. Queries emails with no matching score record (LEFT JOIN scores WHERE NULL).
 2. Auto-scores emails with empty or very short bodies (under 20 words) as all 1s without calling Claude. The score notes explain why.
 3. Sends remaining emails to Claude concurrently, capped by an asyncio semaphore (`batch_size`).
-4. Retries with exponential backoff on rate limit (429) errors - up to 5 attempts with a base delay of 10 seconds.
+4. Retries on rate limit (429) errors using the `retry-after` header from the API response, up to 5 attempts. Falls back to 60 seconds when the header is missing.
 5. Retries once on JSON parse failure. After two consecutive failures, writes a score row with `score_error=True`.
 6. Returns a summary dict with counts (`total_unscored`, `scored`, `auto_scored`, `errors`) and token usage.
 
@@ -207,7 +207,7 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 
 | Route | Response |
 |-------|----------|
-| `POST /api/operations/fetch` | 202 with job record. Rejects 409 if a FETCH job is RUNNING. Accepts optional JSON body with `start_date`, `end_date` (date strings), and `max_count` (int) to override default fetch behaviour. Params are stored in `result_summary.params`. |
+| `POST /api/operations/fetch` | 202 with job record. Rejects 409 if a FETCH job is RUNNING. Accepts optional JSON body with `start_date`, `end_date` (date strings), `max_count` (int), and `auto_score` (bool) to override default fetch behaviour. When `auto_score` is provided it overrides the `auto_score_after_fetch` setting for this fetch only; when omitted the setting applies. Params are stored in `result_summary.params`. |
 | `POST /api/operations/score` | 202 with job record. Rejects 409 if SCORE or RESCORE is RUNNING. |
 | `POST /api/operations/rescore` | 202 with job record. Rejects 409 if SCORE or RESCORE is RUNNING. |
 | `POST /api/operations/export` | 202 with job record. |
@@ -251,12 +251,12 @@ Validation lives in the `SettingsUpdate` Pydantic schema: `global_start_date` ca
 
 `app/tasks.py` provides synchronous wrapper functions (`fetch_task`, `score_task`, `rescore_task`, `export_task`) for RQ. Each calls `asyncio.run()` on the corresponding async runner with `session=None`, so the runner creates its own session.
 
-- `run_fetch_job(session, job_id, *, fetch_start_date, fetch_end_date, max_count)` — reads settings, computes effective start date (overridden when `fetch_start_date` is provided), calls `fetch_and_store` with company_domains and optional `end_date`/`max_count`, optionally runs scoring if `auto_score_after_fetch` is true. Result summary includes `fetched`, `new_reps`, and optionally `scored`, `errors`, `tokens`.
+- `run_fetch_job(session, job_id, *, fetch_start_date, fetch_end_date, max_count, auto_score)` — reads settings, computes effective start date (overridden when `fetch_start_date` is provided), calls `fetch_and_store` with company_domains and optional `end_date`/`max_count`. Runs scoring after fetch when `auto_score` is true, or when `auto_score` is None and the `auto_score_after_fetch` setting is true. Result summary includes `fetched`, `new_reps`, and optionally `scored`, `errors`, `tokens`.
 - `run_score_job(session, job_id)` — reads `scoring_batch_size` from settings, calls `score_unscored_emails`. Result summary includes `scored`, `errors`, `tokens`.
 - `run_rescore_job(session, job_id)` — deletes all existing scores, then calls `score_unscored_emails` to score every email.
 - `run_export_job(session, job_id, output_path)` — generates Excel via `export_to_excel`, stores path in result summary.
 
-No FULL_RUN job type. When `auto_score_after_fetch` is true, a FETCH job handles both phases. Cron POSTs to `/api/operations/fetch` and the setting controls the behaviour.
+No FULL_RUN job type. A FETCH job can handle both fetch and score phases. The `auto_score` request parameter controls scoring per-fetch; when omitted, the `auto_score_after_fetch` setting applies. Cron POSTs to `/api/operations/fetch` and the setting controls the default behaviour. The UI exposes a "Score after fetch" checkbox initialised from the setting, allowing per-fetch override.
 
 ## Key Design Decisions
 

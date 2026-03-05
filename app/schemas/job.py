@@ -8,6 +8,7 @@ class FetchRequest(AppBase):
     start_date: date | None = None
     end_date: date | None = None
     max_count: int | None = None
+    auto_score: bool | None = None
 
 
 class JobResponse(AppBase):

@@ -60,6 +60,7 @@ async def run_fetch_job(
     fetch_start_date: Optional[date] = None,
     fetch_end_date: Optional[date] = None,
     max_count: Optional[int] = None,
+    auto_score: Optional[bool] = None,
 ) -> None:
     async with _session_scope(session) as s:
         result = await s.execute(select(Job).where(Job.job_id == job_id))
@@ -120,7 +121,8 @@ async def run_fetch_job(
 
             summary: dict = {"fetched": fetched_count, "new_reps": new_reps_count}
 
-            if settings.auto_score_after_fetch:
+            should_score = auto_score if auto_score is not None else settings.auto_score_after_fetch
+            if should_score:
                 score_result = await score_unscored_emails(
                     s, batch_size=settings.scoring_batch_size
                 )

@@ -76,7 +76,13 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h3 class="text-sm font-medium text-gray-900">Fetch Emails</h3>
-                    <p class="text-xs text-gray-500">Fetch from HubSpot.{% if settings.auto_score_after_fetch %} Auto-score is enabled.{% endif %}</p>
+                    <p class="text-xs text-gray-500">Fetch from HubSpot.</p>
+                    <label class="mt-1 flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" id="fetch_auto_score"
+                               {% if settings.auto_score_after_fetch %}checked{% endif %}
+                               class="h-3.5 w-3.5 rounded border-gray-300 text-green-600 focus:ring-green-500">
+                        <span class="text-xs text-gray-600">Score after fetch</span>
+                    </label>
                 </div>
                 <button onclick="startOperation('fetch')"
                         class="rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700">Fetch</button>
@@ -131,17 +137,17 @@ let pollTimer = null;
 async function startOperation(type) {
     const opts = { method: 'POST' };
     if (type === 'fetch') {
+        const body = {};
+        const autoScore = document.getElementById('fetch_auto_score');
+        body.auto_score = autoScore.checked;
         const startDate = document.getElementById('fetch_start_date');
         const endDate = document.getElementById('fetch_end_date');
         const maxCount = document.getElementById('fetch_max_count');
-        if (startDate && (startDate.value || endDate.value || maxCount.value)) {
-            const body = {};
-            if (startDate.value) body.start_date = startDate.value;
-            if (endDate.value) body.end_date = endDate.value;
-            if (maxCount.value) body.max_count = parseInt(maxCount.value);
-            opts.headers = { 'Content-Type': 'application/json' };
-            opts.body = JSON.stringify(body);
-        }
+        if (startDate && startDate.value) body.start_date = startDate.value;
+        if (endDate && endDate.value) body.end_date = endDate.value;
+        if (maxCount && maxCount.value) body.max_count = parseInt(maxCount.value);
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify(body);
     }
     const resp = await fetch(`/api/operations/${type}`, opts);
     if (resp.ok) {
