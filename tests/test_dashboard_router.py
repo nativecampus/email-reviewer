@@ -74,6 +74,24 @@ class TestRepDetailPage:
         )
         assert resp.status_code == 200
 
+    async def test_empty_filter_params_do_not_422(
+        self, client, make_rep, make_email, make_score
+    ):
+        await make_rep(email="alice@example.com", display_name="Alice")
+        e = await make_email(from_email="alice@example.com", subject="Test")
+        await make_score(email_id=e.id, overall=7)
+        resp = await client.get(
+            "/reps/alice@example.com",
+            params={
+                "search": "",
+                "date_from": "",
+                "date_to": "",
+                "score_min": "",
+                "score_max": "",
+            },
+        )
+        assert resp.status_code == 200
+
 
 class TestRepExport:
     async def test_export_filtered_returns_xlsx(

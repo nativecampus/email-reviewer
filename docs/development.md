@@ -156,10 +156,16 @@ REDIS_URL=redis://localhost:6379
 3. Start the RQ worker in a separate terminal:
 
 ```bash
+# macOS — must use SimpleWorker to avoid fork() crash with ObjC runtime
+pipenv run rq worker --worker-class rq.SimpleWorker --url redis://localhost:6379 email-reviewer
+
+# Linux
 pipenv run rq worker --url redis://localhost:6379 email-reviewer
 ```
 
-The worker picks up enqueued jobs from the `email-reviewer` queue and runs them in their own process with a fresh database session.
+On macOS the default RQ worker forks a child process per job, which crashes because the Objective-C runtime is not fork-safe. `SimpleWorker` runs jobs in the main process and avoids the issue.
+
+The worker picks up enqueued jobs from the `email-reviewer` queue and runs them with a fresh database session.
 
 When `REDIS_URL` is set, the app validates that Redis is reachable and at least one worker is listening on the queue before accepting operations. If either check fails, the API returns 503 with a message explaining the problem. This prevents jobs from being created that can never complete.
 

@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
 from sqlalchemy import select
 
 from app.models.email import Email
@@ -222,6 +223,16 @@ class TestFetchEmailsFromHubspot:
 
         result = fetch_emails_from_hubspot("token")
         assert result == []
+
+    @patch("app.services.fetcher.requests.post")
+    @patch("app.services.fetcher.time.sleep")
+    def test_raises_on_retry_exhaustion(self, mock_sleep, mock_post):
+        resp = MagicMock(status_code=401)
+        resp.text = "Unauthorized"
+        mock_post.return_value = resp
+
+        with pytest.raises(RuntimeError, match="failed after 5 retries"):
+            fetch_emails_from_hubspot("bad-token")
 
     @patch("app.services.fetcher.requests.post")
     def test_handles_malformed_response(self, mock_post):

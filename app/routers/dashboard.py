@@ -56,17 +56,29 @@ async def team(
     )
 
 
+def _parse_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    return date.fromisoformat(value)
+
+
+def _parse_int(value: str | None) -> int | None:
+    if not value:
+        return None
+    return int(value)
+
+
 @router.get("/reps/{rep_email}", include_in_schema=False)
 async def rep_detail(
     rep_email: str,
     request: Request,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=0),
-    search: str | None = Query(None),
-    date_from: date | None = Query(None),
-    date_to: date | None = Query(None),
-    score_min: int | None = Query(None, ge=1, le=10),
-    score_max: int | None = Query(None, ge=1, le=10),
+    search: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    score_min: str = Query(""),
+    score_max: str = Query(""),
     session: AsyncSession = Depends(get_db),
 ):
     stmt = select(Rep).where(Rep.email == rep_email)
@@ -75,17 +87,22 @@ async def rep_detail(
     if not rep:
         raise HTTPException(status_code=404, detail="Rep not found")
 
+    parsed_date_from = _parse_date(date_from)
+    parsed_date_to = _parse_date(date_to)
+    parsed_score_min = _parse_int(score_min)
+    parsed_score_max = _parse_int(score_max)
+
     effective_per_page = per_page or None
     email_result = await get_rep_emails(
         session,
         rep_email,
         page=page,
         per_page=effective_per_page,
-        search=search,
-        date_from=date_from,
-        date_to=date_to,
-        score_min=score_min,
-        score_max=score_max,
+        search=search or None,
+        date_from=parsed_date_from,
+        date_to=parsed_date_to,
+        score_min=parsed_score_min,
+        score_max=parsed_score_max,
     )
     start = (page - 1) * per_page + 1 if per_page else 1
     end = start + len(email_result["items"]) - 1 if email_result["items"] else 0
@@ -102,11 +119,11 @@ async def rep_detail(
             "pages": email_result["pages"],
             "start": start,
             "end": end,
-            "search": search or "",
-            "date_from": str(date_from) if date_from else "",
-            "date_to": str(date_to) if date_to else "",
-            "score_min": score_min or "",
-            "score_max": score_max or "",
+            "search": search,
+            "date_from": date_from,
+            "date_to": date_to,
+            "score_min": parsed_score_min or "",
+            "score_max": parsed_score_max or "",
         },
     )
 
@@ -115,11 +132,11 @@ async def rep_detail(
 async def rep_export(
     rep_email: str,
     export_all: bool = Query(False),
-    search: str | None = Query(None),
-    date_from: date | None = Query(None),
-    date_to: date | None = Query(None),
-    score_min: int | None = Query(None, ge=1, le=10),
-    score_max: int | None = Query(None, ge=1, le=10),
+    search: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    score_min: str = Query(""),
+    score_max: str = Query(""),
     session: AsyncSession = Depends(get_db),
 ):
     stmt = select(Rep).where(Rep.email == rep_email)
@@ -131,11 +148,11 @@ async def rep_export(
     buf = await export_rep_emails(
         session,
         rep_email,
-        search=search,
-        date_from=date_from,
-        date_to=date_to,
-        score_min=score_min,
-        score_max=score_max,
+        search=search or None,
+        date_from=_parse_date(date_from),
+        date_to=_parse_date(date_to),
+        score_min=_parse_int(score_min),
+        score_max=_parse_int(score_max),
         export_all=export_all,
     )
     filename = f"{rep.display_name.replace(' ', '_')}_emails.xlsx"

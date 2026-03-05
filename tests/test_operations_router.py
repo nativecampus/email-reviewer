@@ -1,9 +1,12 @@
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import select
 
 from app.enums import JobStatus, JobType
+from app.models.base import _utcnow
 from app.models.job import Job
+from app.routers.operations import STALE_PENDING_MINUTES
 from app.worker import redis_available
 from tests.conftest import TestingSessionLocal
 
@@ -348,3 +351,37 @@ class TestJobExecutionIntegration:
         result = await db.execute(select(Job).where(Job.job_id == job_id))
         job = result.scalar_one()
         assert job.status == JobStatus.COMPLETED
+
+
+class TestStaleJobReaping:
+    async def test_stale_pending_job_reaped_on_list(self, client, db, make_job):
+        job = await make_job(job_type=JobType.FETCH, status=JobStatus.PENDING)
+        job.created_at = _utcnow() - timedelta(minutes=STALE_PENDING_MINUTES + 1)
+        await db.commit()
+
+        resp = await client.get("/api/operations/jobs")
+        assert resp.status_code == 200
+        jobs = resp.json()
+        matching = [j for j in jobs if j["job_id"] == job.job_id]
+        assert matching[0]["status"] == "FAILED"
+        assert "Reaped" in matching[0]["error_message"]
+
+    async def test_recent_pending_job_not_reaped(self, client, db, make_job):
+        job = await make_job(job_type=JobType.FETCH, status=JobStatus.PENDING)
+        await db.commit()
+
+        resp = await client.get("/api/operations/jobs")
+        jobs = resp.json()
+        matching = [j for j in jobs if j["job_id"] == job.job_id]
+        assert matching[0]["status"] == "PENDING"
+
+    @patch("app.routers.operations.run_fetch_job", new_callable=AsyncMock)
+    async def test_stale_running_job_unblocks_new_operation(
+        self, mock_run, client, db, make_job
+    ):
+        job = await make_job(job_type=JobType.FETCH, status=JobStatus.RUNNING)
+        job.started_at = _utcnow() - timedelta(minutes=61)
+        await db.commit()
+
+        resp = await client.post("/api/operations/fetch")
+        assert resp.status_code == 202
