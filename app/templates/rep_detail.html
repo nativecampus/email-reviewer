@@ -7,6 +7,67 @@
 <h1 class="text-2xl font-bold mb-2">{{ rep.display_name }}</h1>
 <p class="text-gray-500 mb-6">{{ rep.email }}</p>
 
+<!-- Search / Filter / Export -->
+<form method="get" action="/reps/{{ rep.email }}" class="mb-6 space-y-3" id="filter-form">
+    <div class="flex flex-wrap items-center gap-3">
+        <input type="text" name="search" value="{{ search }}" placeholder="Search subject or body…"
+               class="border border-gray-300 rounded px-3 py-1.5 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-400"
+               id="search-input">
+        <div class="flex items-center gap-2 text-sm">
+            <label class="text-gray-600">From</label>
+            <input type="date" name="date_from" value="{{ date_from }}"
+                   class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+            <label class="text-gray-600">To</label>
+            <input type="date" name="date_to" value="{{ date_to }}"
+                   class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+        </div>
+        <div class="flex items-center gap-2 text-sm">
+            <label class="text-gray-600">Score</label>
+            <select name="score_min" class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option value="">Min</option>
+                {% for s in range(1, 11) %}
+                <option value="{{ s }}" {{ 'selected' if score_min == s else '' }}>{{ s }}</option>
+                {% endfor %}
+            </select>
+            <span class="text-gray-400">–</span>
+            <select name="score_max" class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option value="">Max</option>
+                {% for s in range(1, 11) %}
+                <option value="{{ s }}" {{ 'selected' if score_max == s else '' }}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit"
+                class="bg-blue-600 text-white px-4 py-1.5 rounded text-sm hover:bg-blue-700">Filter</button>
+        <a href="/reps/{{ rep.email }}" class="text-sm text-gray-500 hover:underline">Clear</a>
+        <button type="button" onclick="document.getElementById('export-modal').classList.remove('hidden')"
+                class="ml-auto text-gray-500 hover:text-gray-700" title="Export">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+        </button>
+    </div>
+</form>
+
+<!-- Export modal -->
+<div id="export-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-80">
+        <h2 class="text-lg font-semibold mb-4">Export Emails</h2>
+        <div class="space-y-3">
+            <a href="/reps/{{ rep.email }}/export?export_all=false&search={{ search }}&date_from={{ date_from }}&date_to={{ date_to }}&score_min={{ score_min }}&score_max={{ score_max }}"
+               class="block w-full text-center bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm">
+                Export filtered results
+            </a>
+            <a href="/reps/{{ rep.email }}/export?export_all=true"
+               class="block w-full text-center bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 text-sm">
+                Export all emails
+            </a>
+        </div>
+        <button onclick="document.getElementById('export-modal').classList.add('hidden')"
+                class="mt-4 w-full text-center text-sm text-gray-500 hover:underline">Cancel</button>
+    </div>
+</div>
+
 <div class="bg-white rounded-lg shadow overflow-x-auto">
     <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">

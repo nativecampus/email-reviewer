@@ -1,6 +1,7 @@
 import math
+from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -52,20 +53,54 @@ async def get_team(
 
 
 async def get_rep_emails(
-    session: AsyncSession, rep_email: str, *, page: int = 1, per_page: int | None = 20
+    session: AsyncSession,
+    rep_email: str,
+    *,
+    page: int = 1,
+    per_page: int | None = 20,
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    score_min: int | None = None,
+    score_max: int | None = None,
 ):
-    """Scored emails for one rep, ordered by date desc."""
+    """Scored emails for one rep, ordered by date desc.
+
+    Optional filters:
+    - search: ILIKE match on subject or body_text
+    - date_from / date_to: inclusive range on email timestamp
+    - score_min / score_max: inclusive range on overall score
+    """
+    filters = [Email.from_email == rep_email]
+
+    if search:
+        pattern = f"%{search}%"
+        filters.append(
+            or_(
+                Email.subject.ilike(pattern),
+                Email.body_text.ilike(pattern),
+            )
+        )
+    if date_from:
+        filters.append(Email.timestamp >= date_from)
+    if date_to:
+        filters.append(Email.timestamp <= date_to)
+    if score_min is not None:
+        filters.append(Score.overall >= score_min)
+    if score_max is not None:
+        filters.append(Score.overall <= score_max)
+
     count_stmt = (
         select(func.count(Email.id))
         .join(Score, Score.email_id == Email.id)
-        .where(Email.from_email == rep_email)
+        .where(*filters)
     )
     total = (await session.execute(count_stmt)).scalar() or 0
 
     stmt = (
         select(Email)
         .join(Score, Score.email_id == Email.id)
-        .where(Email.from_email == rep_email)
+        .where(*filters)
         .options(joinedload(Email.score))
         .order_by(Email.timestamp.desc())
     )

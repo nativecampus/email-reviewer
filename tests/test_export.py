@@ -1,7 +1,10 @@
+from datetime import date, datetime
+from io import BytesIO
+
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
-from app.services.export import export_to_excel
+from app.services.export import export_rep_emails, export_to_excel
 
 
 class TestExportToExcel:
@@ -131,3 +134,84 @@ class TestExportToExcel:
 
         reps = [ws.cell(row=r, column=1).value for r in range(2, ws.max_row + 1)]
         assert reps == ["high@example.com", "mid@example.com", "low@example.com"]
+
+
+class TestExportRepEmails:
+    async def test_returns_bytes(self, db, make_rep, make_email, make_score):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        e = await make_email(from_email="rep@x.com", subject="Hello")
+        await make_score(email_id=e.id)
+
+        buf = await export_rep_emails(db, "rep@x.com")
+        assert isinstance(buf, BytesIO)
+        assert len(buf.getvalue()) > 0
+
+    async def test_filters_produce_valid_excel_with_matching_rows(
+        self, db, make_rep, make_email, make_score
+    ):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        e1 = await make_email(
+            from_email="rep@x.com", subject="Match",
+            timestamp=datetime(2024, 6, 1),
+        )
+        await make_score(email_id=e1.id, overall=8)
+        e2 = await make_email(
+            from_email="rep@x.com", subject="Other",
+            timestamp=datetime(2024, 6, 1),
+        )
+        await make_score(email_id=e2.id, overall=3)
+
+        buf = await export_rep_emails(
+            db, "rep@x.com", search="Match", score_min=5
+        )
+        wb = load_workbook(buf)
+        ws = wb["Email Scores"]
+        # Header + 1 matching row
+        assert ws.max_row == 2
+        assert ws.cell(row=2, column=2).value == "Match"
+
+    async def test_export_all_ignores_filters(
+        self, db, make_rep, make_email, make_score
+    ):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        for i in range(3):
+            e = await make_email(from_email="rep@x.com", subject=f"Email {i}")
+            await make_score(email_id=e.id, overall=5 + i)
+
+        buf = await export_rep_emails(
+            db, "rep@x.com", search="nonexistent", score_min=99, export_all=True
+        )
+        wb = load_workbook(buf)
+        ws = wb["Email Scores"]
+        # Header + 3 data rows
+        assert ws.max_row == 4
+
+    async def test_excel_has_expected_headers_and_colour_coding(
+        self, db, make_rep, make_email, make_score
+    ):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        e = await make_email(from_email="rep@x.com", subject="Test")
+        await make_score(
+            email_id=e.id,
+            personalisation=8, clarity=6, value_proposition=4, cta=2, overall=5,
+        )
+
+        buf = await export_rep_emails(db, "rep@x.com")
+        wb = load_workbook(buf)
+        ws = wb["Email Scores"]
+
+        headers = [cell.value for cell in ws[1]]
+        assert headers == [
+            "Rep", "Subject", "Date", "Personalisation", "Clarity",
+            "Value Proposition", "CTA", "Overall", "Notes",
+        ]
+
+        green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+        yellow = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+        orange = PatternFill(start_color="F4B084", end_color="F4B084", fill_type="solid")
+        red = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+
+        assert ws.cell(row=2, column=4).fill == green   # 8 >= 8
+        assert ws.cell(row=2, column=5).fill == yellow  # 6 >= 6
+        assert ws.cell(row=2, column=6).fill == orange  # 4 >= 4
+        assert ws.cell(row=2, column=7).fill == red     # 2 < 4

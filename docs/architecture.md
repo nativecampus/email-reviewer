@@ -162,6 +162,8 @@ Returns the number of emails stored.
 
 Both sheets use Arial font, frozen header rows, and auto-filters. Returns the output file path.
 
+A second entry point, `export_rep_emails(session, rep_email, *, search, date_from, date_to, score_min, score_max, export_all)`, generates an in-memory Excel workbook (BytesIO) for a single rep's emails. Accepts the same filter parameters as `get_rep_emails()`. When `export_all=True`, all filter params are ignored and every scored email for the rep is included. The workbook contains a single "Email Scores" sheet with the same colour-coded formatting as the full export.
+
 ## Dashboard and API
 
 The web UI is served by four routers registered in `app/main.py`.
@@ -173,7 +175,8 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 | Route | View |
 |-------|------|
 | `GET /` | Team page — rep table with colour-coded average scores, links to rep detail. Accepts `?page=1&per_page=20` query params for pagination. `per_page=0` returns all results. |
-| `GET /reps/{rep_email}` | Rep detail page — scored email list with expandable body preview. Accepts `?page=1&per_page=20` query params for pagination. `per_page=0` returns all results. |
+| `GET /reps/{rep_email}` | Rep detail page — scored email list with expandable body preview. Accepts `?page=1&per_page=20` query params for pagination. `per_page=0` returns all results. Also accepts `?search=`, `?date_from=YYYY-MM-DD`, `?date_to=YYYY-MM-DD`, `?score_min=1..10`, `?score_max=1..10` for filtering. Filters apply via ILIKE on subject/body, inclusive date range on timestamp, and inclusive range on overall score. |
+| `GET /reps/{rep_email}/export` | Downloads an Excel (.xlsx) file of the rep's scored emails. Accepts the same filter query params as the detail page plus `?export_all=true` to ignore filters and include all emails. |
 
 ### Settings Page (`app/routers/settings.py`)
 
@@ -214,7 +217,7 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 Async query functions used by both routers:
 
 - `get_team(session, *, page=1, per_page=20)` — JOINs emails/scores/reps, GROUPs BY rep, computes AVGs, sorts by overall descending. Returns paginated dict `{items, total, page, per_page, pages}`. Pass `per_page=None` or `0` to return all results.
-- `get_rep_emails(session, rep_email, *, page=1, per_page=20)` — scored emails for one rep, ordered by date descending. Returns paginated dict `{items, total, page, per_page, pages}`. Pass `per_page=None` or `0` to return all results.
+- `get_rep_emails(session, rep_email, *, page=1, per_page=20, search=None, date_from=None, date_to=None, score_min=None, score_max=None)` — scored emails for one rep, ordered by date descending. Returns paginated dict `{items, total, page, per_page, pages}`. Pass `per_page=None` or `0` to return all results. Optional filters: `search` (ILIKE on subject/body_text), `date_from`/`date_to` (inclusive range on timestamp), `score_min`/`score_max` (inclusive range on overall score). Filters apply before pagination; total reflects the filtered count.
 - `get_email_detail(session, email_id)` — single email with its score (eager loaded)
 - `get_stats(session)` — summary counts (total_emails, total_scored, total_reps) and avg_overall
 

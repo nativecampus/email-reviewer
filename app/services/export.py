@@ -1,8 +1,11 @@
 """Export scored email data to Excel."""
 
+from datetime import date
+from io import BytesIO
+
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.email import Email
@@ -131,3 +134,90 @@ async def export_to_excel(session: AsyncSession, output_path: str) -> str:
 
     wb.save(output_path)
     return output_path
+
+
+async def export_rep_emails(
+    session: AsyncSession,
+    rep_email: str,
+    *,
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    score_min: int | None = None,
+    score_max: int | None = None,
+    export_all: bool = False,
+) -> BytesIO:
+    """Export a single rep's scored emails to an Excel workbook in memory.
+
+    When export_all is True, all filter params are ignored and every scored
+    email for the rep is included.
+
+    Returns a BytesIO buffer containing the .xlsx file.
+    """
+    filters = [
+        Email.from_email == rep_email,
+        Score.score_error.is_(False),
+    ]
+
+    if not export_all:
+        if search:
+            pattern = f"%{search}%"
+            filters.append(
+                or_(
+                    Email.subject.ilike(pattern),
+                    Email.body_text.ilike(pattern),
+                )
+            )
+        if date_from:
+            filters.append(Email.timestamp >= date_from)
+        if date_to:
+            filters.append(Email.timestamp <= date_to)
+        if score_min is not None:
+            filters.append(Score.overall >= score_min)
+        if score_max is not None:
+            filters.append(Score.overall <= score_max)
+
+    stmt = (
+        select(Email, Score)
+        .join(Score, Email.id == Score.email_id)
+        .where(*filters)
+        .order_by(Email.timestamp.desc())
+    )
+    result = await session.execute(stmt)
+    rows = result.all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Email Scores"
+    ws.append(EMAIL_SCORES_HEADERS)
+    for cell in ws[1]:
+        cell.font = HEADER_FONT
+    ws.freeze_panes = "A2"
+
+    for email, score in rows:
+        ws.append([
+            email.from_name or email.from_email,
+            email.subject,
+            email.timestamp,
+            score.personalisation,
+            score.clarity,
+            score.value_proposition,
+            score.cta,
+            score.overall,
+            score.notes,
+        ])
+        row_num = ws.max_row
+        for col in range(1, len(EMAIL_SCORES_HEADERS) + 1):
+            ws.cell(row=row_num, column=col).font = BODY_FONT
+        for i, dim in enumerate(SCORE_DIMS):
+            cell = ws.cell(row=row_num, column=4 + i)
+            fill = _score_fill(getattr(score, dim))
+            if fill:
+                cell.fill = fill
+
+    ws.auto_filter.ref = ws.dimensions
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf

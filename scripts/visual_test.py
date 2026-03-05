@@ -129,6 +129,13 @@ def _take_screenshots():
     time.sleep(1)
     _screenshot(driver, tailwind_css, "02_rep_detail_via_click")
 
+    # ── 2b. Rep detail with search/filter controls visible ────────────────
+    print("  2b. Rep detail with search/filter controls")
+    search_input = driver.find_element(By.ID, "search-input")
+    search_input.send_keys("test")
+    _screenshot(driver, tailwind_css, "02b_rep_detail_filters")
+    search_input.clear()
+
     # ── 3. Expand all email <details> to show body and notes ─────────────
     print("  3. Expand email details (body + notes)")
     for summary in driver.find_elements(By.CSS_SELECTOR, "details summary"):

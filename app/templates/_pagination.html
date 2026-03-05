@@ -1,3 +1,9 @@
+{% set ns = namespace(filter_qs="") %}
+{% if search is defined and search %}{% set ns.filter_qs = ns.filter_qs ~ "&search=" ~ search %}{% endif %}
+{% if date_from is defined and date_from %}{% set ns.filter_qs = ns.filter_qs ~ "&date_from=" ~ date_from %}{% endif %}
+{% if date_to is defined and date_to %}{% set ns.filter_qs = ns.filter_qs ~ "&date_to=" ~ date_to %}{% endif %}
+{% if score_min is defined and score_min %}{% set ns.filter_qs = ns.filter_qs ~ "&score_min=" ~ score_min %}{% endif %}
+{% if score_max is defined and score_max %}{% set ns.filter_qs = ns.filter_qs ~ "&score_max=" ~ score_max %}{% endif %}
 {% if total > 0 %}
 <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-600" id="pagination">
     <div>
@@ -11,17 +17,17 @@
     <div class="flex items-center gap-2">
         <span class="mr-1">Per page:</span>
         {% for size in [20, 50, 100] %}
-        <a href="?page=1&per_page={{ size }}"
+        <a href="?page=1&per_page={{ size }}{{ ns.filter_qs }}"
            class="px-2 py-1 rounded {{ 'bg-blue-600 text-white' if per_page == size else 'bg-gray-200 hover:bg-gray-300' }}">{{ size }}</a>
         {% endfor %}
-        <a href="?page=1&per_page=0"
+        <a href="?page=1&per_page=0{{ ns.filter_qs }}"
            class="px-2 py-1 rounded {{ 'bg-blue-600 text-white' if per_page == 0 else 'bg-gray-200 hover:bg-gray-300' }}">All</a>
     </div>
 
     {% if per_page and pages > 1 %}
     <div class="flex items-center gap-2">
         {% if page > 1 %}
-        <a href="?page={{ page - 1 }}&per_page={{ per_page }}" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">&laquo; Previous</a>
+        <a href="?page={{ page - 1 }}&per_page={{ per_page }}{{ ns.filter_qs }}" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">&laquo; Previous</a>
         {% else %}
         <span class="px-3 py-1 rounded bg-gray-100 text-gray-400">&laquo; Previous</span>
         {% endif %}
@@ -29,7 +35,7 @@
         <span>Page {{ page }} of {{ pages }}</span>
 
         {% if page < pages %}
-        <a href="?page={{ page + 1 }}&per_page={{ per_page }}" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">Next &raquo;</a>
+        <a href="?page={{ page + 1 }}&per_page={{ per_page }}{{ ns.filter_qs }}" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">Next &raquo;</a>
         {% else %}
         <span class="px-3 py-1 rounded bg-gray-100 text-gray-400">Next &raquo;</span>
         {% endif %}

@@ -1,4 +1,5 @@
 import math
+from datetime import date, datetime
 
 import pytest
 
@@ -122,3 +123,151 @@ class TestGetRepEmailsPagination:
         assert result["total"] == 25
         assert result["per_page"] is None
         assert result["pages"] == 1
+
+
+class TestGetRepEmailsFilters:
+    """Tests for search and filter parameters on get_rep_emails()."""
+
+    async def test_search_filters_by_subject(self, db, make_rep, make_email, make_score):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        e1 = await make_email(from_email="rep@x.com", subject="Quarterly review")
+        await make_score(email_id=e1.id)
+        e2 = await make_email(from_email="rep@x.com", subject="Hello there")
+        await make_score(email_id=e2.id)
+
+        result = await get_rep_emails(db, "rep@x.com", search="quarterly")
+        assert result["total"] == 1
+        assert result["items"][0].subject == "Quarterly review"
+
+    async def test_search_filters_by_body_text(self, db, make_rep, make_email, make_score):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        e1 = await make_email(
+            from_email="rep@x.com", subject="A", body_text="Meeting about budget"
+        )
+        await make_score(email_id=e1.id)
+        e2 = await make_email(
+            from_email="rep@x.com", subject="B", body_text="General greeting"
+        )
+        await make_score(email_id=e2.id)
+
+        result = await get_rep_emails(db, "rep@x.com", search="budget")
+        assert result["total"] == 1
+        assert result["items"][0].body_text == "Meeting about budget"
+
+    async def test_date_from_filters_emails(self, db, make_rep, make_email, make_score):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        e1 = await make_email(
+            from_email="rep@x.com", subject="Old",
+            timestamp=datetime(2024, 1, 1),
+        )
+        await make_score(email_id=e1.id)
+        e2 = await make_email(
+            from_email="rep@x.com", subject="New",
+            timestamp=datetime(2024, 6, 15),
+        )
+        await make_score(email_id=e2.id)
+
+        result = await get_rep_emails(
+            db, "rep@x.com", date_from=date(2024, 3, 1)
+        )
+        assert result["total"] == 1
+        assert result["items"][0].subject == "New"
+
+    async def test_date_to_filters_emails(self, db, make_rep, make_email, make_score):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        e1 = await make_email(
+            from_email="rep@x.com", subject="Old",
+            timestamp=datetime(2024, 1, 1),
+        )
+        await make_score(email_id=e1.id)
+        e2 = await make_email(
+            from_email="rep@x.com", subject="New",
+            timestamp=datetime(2024, 6, 15),
+        )
+        await make_score(email_id=e2.id)
+
+        result = await get_rep_emails(
+            db, "rep@x.com", date_to=date(2024, 3, 1)
+        )
+        assert result["total"] == 1
+        assert result["items"][0].subject == "Old"
+
+    async def test_score_min_filters_emails(self, db, make_rep, make_email, make_score):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        e1 = await make_email(from_email="rep@x.com", subject="Low")
+        await make_score(email_id=e1.id, overall=3)
+        e2 = await make_email(from_email="rep@x.com", subject="High")
+        await make_score(email_id=e2.id, overall=8)
+
+        result = await get_rep_emails(db, "rep@x.com", score_min=5)
+        assert result["total"] == 1
+        assert result["items"][0].subject == "High"
+
+    async def test_score_max_filters_emails(self, db, make_rep, make_email, make_score):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        e1 = await make_email(from_email="rep@x.com", subject="Low")
+        await make_score(email_id=e1.id, overall=3)
+        e2 = await make_email(from_email="rep@x.com", subject="High")
+        await make_score(email_id=e2.id, overall=8)
+
+        result = await get_rep_emails(db, "rep@x.com", score_max=5)
+        assert result["total"] == 1
+        assert result["items"][0].subject == "Low"
+
+    async def test_combined_filters(self, db, make_rep, make_email, make_score):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        # Matches search + date + score
+        e1 = await make_email(
+            from_email="rep@x.com", subject="Quarterly review",
+            timestamp=datetime(2024, 6, 1),
+        )
+        await make_score(email_id=e1.id, overall=8)
+        # Matches search + date but not score
+        e2 = await make_email(
+            from_email="rep@x.com", subject="Quarterly update",
+            timestamp=datetime(2024, 7, 1),
+        )
+        await make_score(email_id=e2.id, overall=2)
+        # Matches date + score but not search
+        e3 = await make_email(
+            from_email="rep@x.com", subject="Hello",
+            timestamp=datetime(2024, 5, 1),
+        )
+        await make_score(email_id=e3.id, overall=9)
+
+        result = await get_rep_emails(
+            db, "rep@x.com",
+            search="quarterly",
+            date_from=date(2024, 1, 1),
+            score_min=5,
+        )
+        assert result["total"] == 1
+        assert result["items"][0].subject == "Quarterly review"
+
+    async def test_pagination_with_filters(self, db, make_rep, make_email, make_score):
+        await make_rep(email="rep@x.com", display_name="Rep")
+        for i in range(5):
+            e = await make_email(
+                from_email="rep@x.com", subject=f"Match {i}",
+                timestamp=datetime(2024, 6, i + 1),
+            )
+            await make_score(email_id=e.id, overall=8)
+        # Non-matching emails
+        for i in range(3):
+            e = await make_email(
+                from_email="rep@x.com", subject=f"Other {i}",
+                timestamp=datetime(2024, 6, i + 1),
+            )
+            await make_score(email_id=e.id, overall=2)
+
+        result = await get_rep_emails(
+            db, "rep@x.com", score_min=5, page=1, per_page=3
+        )
+        assert result["total"] == 5
+        assert len(result["items"]) == 3
+        assert result["pages"] == 2
+
+        page2 = await get_rep_emails(
+            db, "rep@x.com", score_min=5, page=2, per_page=3
+        )
+        assert len(page2["items"]) == 2
