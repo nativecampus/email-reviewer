@@ -8,7 +8,7 @@ pre-compiled Tailwind CSS injected into each page. The CSS is compiled
 from the project templates using the Tailwind CLI.
 
 Captures:
-    - Team table with all reps
+    - Team table with all reps and pagination controls
     - Click-through from team to each rep detail page
     - Expanded <details> elements showing email body and scorer notes
     - Back-to-team navigation
@@ -114,6 +114,12 @@ def _take_screenshots():
     driver.get(f"{BASE}/")
     time.sleep(1)
     _screenshot(driver, tailwind_css, "01_team")
+
+    # ── 1b. Team page with per_page=2 to show pagination controls ──────
+    print("  1b. Team with pagination controls")
+    driver.get(f"{BASE}/?per_page=2")
+    time.sleep(1)
+    _screenshot(driver, tailwind_css, "01b_team_paginated")
 
     # ── 2. Click first rep link -> rep detail ────────────────────────────
     print("  2. Click first rep -> rep detail")

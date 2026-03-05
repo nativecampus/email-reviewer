@@ -172,8 +172,8 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 
 | Route | View |
 |-------|------|
-| `GET /` | Team page — rep table with colour-coded average scores, links to rep detail |
-| `GET /reps/{rep_email}` | Rep detail page — scored email list with expandable body preview |
+| `GET /` | Team page — rep table with colour-coded average scores, links to rep detail. Accepts `?page=1&per_page=20` query params for pagination. `per_page=0` returns all results. |
+| `GET /reps/{rep_email}` | Rep detail page — scored email list with expandable body preview. Accepts `?page=1&per_page=20` query params for pagination. `per_page=0` returns all results. |
 
 ### Settings Page (`app/routers/settings.py`)
 
@@ -213,8 +213,8 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 
 Async query functions used by both routers:
 
-- `get_team(session)` — JOINs emails/scores/reps, GROUPs BY rep, computes AVGs, sorts by overall descending
-- `get_rep_emails(session, rep_email)` — scored emails for one rep, ordered by date descending
+- `get_team(session, *, page=1, per_page=20)` — JOINs emails/scores/reps, GROUPs BY rep, computes AVGs, sorts by overall descending. Returns paginated dict `{items, total, page, per_page, pages}`. Pass `per_page=None` or `0` to return all results.
+- `get_rep_emails(session, rep_email, *, page=1, per_page=20)` — scored emails for one rep, ordered by date descending. Returns paginated dict `{items, total, page, per_page, pages}`. Pass `per_page=None` or `0` to return all results.
 - `get_email_detail(session, email_id)` — single email with its score (eager loaded)
 - `get_stats(session)` — summary counts (total_emails, total_scored, total_reps) and avg_overall
 

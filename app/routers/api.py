@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api")
 
 @router.get("/reps", response_model=list[RepTeamRow])
 async def list_reps(session: AsyncSession = Depends(get_db)):
-    rows = await get_team(session)
+    result = await get_team(session)
     return [
         RepTeamRow(
             email=r.email,
@@ -23,13 +23,13 @@ async def list_reps(session: AsyncSession = Depends(get_db)):
             avg_cta=round(r.avg_cta, 2) if r.avg_cta else None,
             avg_overall=round(r.avg_overall, 2) if r.avg_overall else None,
         )
-        for r in rows
+        for r in result["items"]
     ]
 
 
 @router.get("/reps/{rep_email}/emails")
 async def list_rep_emails(rep_email: str, session: AsyncSession = Depends(get_db)):
-    emails = await get_rep_emails(session, rep_email)
+    result = await get_rep_emails(session, rep_email)
     return [
         {
             "id": e.id,
@@ -46,7 +46,7 @@ async def list_rep_emails(rep_email: str, session: AsyncSession = Depends(get_db
                 "notes": e.score.notes,
             } if e.score else None,
         }
-        for e in emails
+        for e in result["items"]
     ]
 
 
