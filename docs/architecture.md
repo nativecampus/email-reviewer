@@ -280,4 +280,6 @@ No FULL_RUN job type. A FETCH job can handle both fetch and score phases. The `a
 
 **Operations lifecycle** - Each operation creates a job record (PENDING), then either enqueues to RQ or adds a BackgroundTask. The job transitions through RUNNING to COMPLETED or FAILED. Conflict prevention rejects new operations when a conflicting job is already RUNNING (e.g. only one FETCH at a time). Cron hits the same API endpoints as the UI.
 
+**Stale job reaping** - When listing jobs or starting a new operation, the operations router marks stale jobs as FAILED. PENDING jobs older than 10 minutes and RUNNING jobs older than 60 minutes are reaped. This handles cases where a worker crashes (e.g. RQ fork failure) and never transitions the job out of PENDING/RUNNING.
+
 **Single-row settings** - Application configuration lives in a `settings` table with a check constraint enforcing `id = 1`. Seeded on the initial migration. Avoids config files and environment variable sprawl for runtime-adjustable values.

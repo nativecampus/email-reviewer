@@ -113,4 +113,12 @@
     </table>
 </div>
 {% include "_pagination.html" %}
+<script>
+document.getElementById('filter-form').addEventListener('submit', function(e) {
+    var inputs = this.querySelectorAll('input, select');
+    for (var i = 0; i < inputs.length; i++) {
+        if (!inputs[i].value) inputs[i].removeAttribute('name');
+    }
+});
+</script>
 {% endblock %}

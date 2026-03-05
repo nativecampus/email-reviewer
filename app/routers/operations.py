@@ -1,11 +1,13 @@
+from datetime import timedelta
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.enums import JobStatus, JobType
+from app.models.base import _utcnow
 from app.models.job import Job
 from app.schemas.job import FetchRequest, JobResponse, LastRunResponse
 from app.services.job_runner import (
@@ -18,6 +20,38 @@ from app.tasks import export_task, fetch_task, rescore_task, score_task
 from app.worker import get_queue, validate_redis
 
 router = APIRouter(prefix="/api/operations")
+
+STALE_PENDING_MINUTES = 10
+STALE_RUNNING_MINUTES = 60
+
+
+async def _reap_stale_jobs(session: AsyncSession) -> None:
+    """Mark PENDING and RUNNING jobs as FAILED when they exceed age thresholds.
+
+    PENDING jobs older than STALE_PENDING_MINUTES were never picked up by a worker
+    (e.g. worker crashed before execution). RUNNING jobs older than STALE_RUNNING_MINUTES
+    likely died mid-execution without recording failure.
+    """
+    now = _utcnow()
+    pending_cutoff = now - timedelta(minutes=STALE_PENDING_MINUTES)
+    running_cutoff = now - timedelta(minutes=STALE_RUNNING_MINUTES)
+
+    stmt = (
+        update(Job)
+        .where(
+            or_(
+                (Job.status == JobStatus.PENDING) & (Job.created_at < pending_cutoff),
+                (Job.status == JobStatus.RUNNING) & (Job.started_at < running_cutoff),
+            )
+        )
+        .values(
+            status=JobStatus.FAILED,
+            completed_at=now,
+            error_message="Reaped: job did not complete within expected time",
+        )
+    )
+    await session.execute(stmt)
+    await session.flush()
 
 
 async def _check_no_running(
@@ -64,6 +98,7 @@ async def start_fetch(
     body: Optional[FetchRequest] = Body(default=None),
 ):
     queue = _validate_queue()
+    await _reap_stale_jobs(session)
     await _check_no_running(session, [JobType.FETCH])
     job = await _create_job(session, JobType.FETCH)
 
@@ -100,6 +135,7 @@ async def start_score(
     session: AsyncSession = Depends(get_db),
 ):
     queue = _validate_queue()
+    await _reap_stale_jobs(session)
     await _check_no_running(session, [JobType.SCORE, JobType.RESCORE])
     job = await _create_job(session, JobType.SCORE)
     await session.commit()
@@ -117,6 +153,7 @@ async def start_rescore(
     session: AsyncSession = Depends(get_db),
 ):
     queue = _validate_queue()
+    await _reap_stale_jobs(session)
     await _check_no_running(session, [JobType.SCORE, JobType.RESCORE])
     job = await _create_job(session, JobType.RESCORE)
     await session.commit()
@@ -146,6 +183,7 @@ async def start_export(
 
 @router.get("/jobs", response_model=list[JobResponse])
 async def list_jobs(session: AsyncSession = Depends(get_db)):
+    await _reap_stale_jobs(session)
     result = await session.execute(
         select(Job).order_by(Job.created_at.desc())
     )
