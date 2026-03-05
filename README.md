@@ -18,7 +18,7 @@ See [docs/development.md](docs/development.md) for full setup instructions.
 
 1. **Fetch** - Pull outgoing sales emails from HubSpot, filter to rep domains, upsert into PostgreSQL
 2. **Score** - Send unscored emails to Claude API, evaluate against a 5-criteria rubric (personalisation, clarity, value proposition, CTA, overall), store results
-3. **View** - Web dashboard showing rep leaderboard and individual email scores
+3. **View** - Web dashboard showing rep team and individual email scores
 
 ## Tech Stack
 

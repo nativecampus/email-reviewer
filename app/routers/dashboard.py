@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Rep
-from app.services.rep import get_leaderboard, get_rep_emails
+from app.services.rep import get_rep_emails, get_team
 from app.templating import templates
 
 router = APIRouter()
@@ -22,11 +22,11 @@ def score_class(value) -> str:
 
 
 @router.get("/", include_in_schema=False)
-async def leaderboard(request: Request, session: AsyncSession = Depends(get_db)):
-    rows = await get_leaderboard(session)
+async def team(request: Request, session: AsyncSession = Depends(get_db)):
+    rows = await get_team(session)
     return templates.TemplateResponse(
         request,
-        "leaderboard.html",
+        "team.html",
         {"rows": rows, "score_class": score_class},
     )
 

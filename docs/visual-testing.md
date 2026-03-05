@@ -117,7 +117,7 @@ chrome_options.binary_location = "/usr/bin/google-chrome-stable"
 driver = webdriver.Chrome(options=chrome_options)
 
 urls = {
-    "leaderboard": "http://127.0.0.1:8765/",
+    "team": "http://127.0.0.1:8765/",
     "settings": "http://127.0.0.1:8765/settings",
 }
 

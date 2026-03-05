@@ -67,7 +67,7 @@ Five tables:
 | score_error | Boolean | True if scoring failed |
 | scored_at | DateTime | When the score was generated |
 
-**reps** - Canonical rep identities for name normalisation and leaderboard aggregation.
+**reps** - Canonical rep identities for name normalisation and team aggregation.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -172,7 +172,7 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 
 | Route | View |
 |-------|------|
-| `GET /` | Leaderboard page — rep table with colour-coded average scores, links to rep detail |
+| `GET /` | Team page — rep table with colour-coded average scores, links to rep detail |
 | `GET /reps/{rep_email}` | Rep detail page — scored email list with expandable body preview |
 
 ### Settings Page (`app/routers/settings.py`)
@@ -185,7 +185,7 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 
 | Route | Response |
 |-------|----------|
-| `GET /api/reps` | List of `RepLeaderboardRow` objects sorted by overall avg descending |
+| `GET /api/reps` | List of `RepTeamRow` objects sorted by overall avg descending |
 | `GET /api/reps/{rep_email}/emails` | Scored emails for one rep, ordered by date descending |
 | `GET /api/emails/{email_id}` | Single email with its score detail |
 | `GET /api/stats` | `StatsResponse` with total_emails, total_scored, total_reps, avg_overall |
@@ -213,7 +213,7 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 
 Async query functions used by both routers:
 
-- `get_leaderboard(session)` — JOINs emails/scores/reps, GROUPs BY rep, computes AVGs, sorts by overall descending
+- `get_team(session)` — JOINs emails/scores/reps, GROUPs BY rep, computes AVGs, sorts by overall descending
 - `get_rep_emails(session, rep_email)` — scored emails for one rep, ordered by date descending
 - `get_email_detail(session, email_id)` — single email with its score (eager loaded)
 - `get_stats(session)` — summary counts (total_emails, total_scored, total_reps) and avg_overall

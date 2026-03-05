@@ -5,7 +5,7 @@ from sqlalchemy.orm import joinedload
 from app.models import Email, Rep, Score
 
 
-async def get_leaderboard(session: AsyncSession):
+async def get_team(session: AsyncSession):
     """JOIN emails/scores/reps, GROUP BY rep, compute AVGs, sort by overall desc."""
     stmt = (
         select(

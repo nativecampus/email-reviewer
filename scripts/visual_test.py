@@ -8,10 +8,10 @@ pre-compiled Tailwind CSS injected into each page. The CSS is compiled
 from the project templates using the Tailwind CLI.
 
 Captures:
-    - Leaderboard table with all reps
-    - Click-through from leaderboard to each rep detail page
+    - Team table with all reps
+    - Click-through from team to each rep detail page
     - Expanded <details> elements showing email body and scorer notes
-    - Back-to-leaderboard navigation
+    - Back-to-team navigation
     - Settings page with form values and operations panel
     - Nav bar link navigation between pages
 
@@ -109,11 +109,11 @@ def _take_screenshots():
     with open(TAILWIND_CSS_CACHE) as f:
         tailwind_css = f.read()
 
-    # ── 1. Leaderboard ──────────────────────────────────────────────────
-    print("  1. Leaderboard")
+    # ── 1. Team ──────────────────────────────────────────────────────────
+    print("  1. Team")
     driver.get(f"{BASE}/")
     time.sleep(1)
-    _screenshot(driver, tailwind_css, "01_leaderboard")
+    _screenshot(driver, tailwind_css, "01_team")
 
     # ── 2. Click first rep link -> rep detail ────────────────────────────
     print("  2. Click first rep -> rep detail")
@@ -130,12 +130,12 @@ def _take_screenshots():
         time.sleep(0.3)
     _screenshot(driver, tailwind_css, "03_rep_detail_expanded")
 
-    # ── 4. Click "Back to Leaderboard" ───────────────────────────────────
-    print("  4. Click back to leaderboard link")
-    back_link = driver.find_element(By.LINK_TEXT, "← Back to Leaderboard")
+    # ── 4. Click "Back to Team" ─────────────────────────────────────────
+    print("  4. Click back to team link")
+    back_link = driver.find_element(By.LINK_TEXT, "\u2190 Back to Team")
     back_link.click()
     time.sleep(1)
-    _screenshot(driver, tailwind_css, "04_leaderboard_via_back")
+    _screenshot(driver, tailwind_css, "04_team_via_back")
 
     # ── 5. Click a different rep ─────────────────────────────────────────
     print("  5. Click different rep")
@@ -159,11 +159,11 @@ def _take_screenshots():
     time.sleep(2)  # extra time for loadJobs() JS fetch
     _screenshot(driver, tailwind_css, "07_settings")
 
-    # ── 7. Navigate back to Leaderboard via nav link ─────────────────────
-    print("  7. Click Leaderboard nav link")
-    driver.find_element(By.LINK_TEXT, "Leaderboard").click()
+    # ── 7. Navigate back to Team via nav link ────────────────────────────
+    print("  7. Click Team nav link")
+    driver.find_element(By.LINK_TEXT, "Team").click()
     time.sleep(1)
-    _screenshot(driver, tailwind_css, "08_leaderboard_via_nav")
+    _screenshot(driver, tailwind_css, "08_team_via_nav")
 
     # ── 8. Direct URL to every rep detail, with expanded emails ──────────
     rep_emails = [

@@ -1,14 +1,14 @@
 import pytest
 
 
-class TestLeaderboardPage:
+class TestTeamPage:
     async def test_get_root_returns_200(self, client):
         resp = await client.get("/")
         assert resp.status_code == 200
 
-    async def test_get_root_contains_leaderboard(self, client):
+    async def test_get_root_contains_team(self, client):
         resp = await client.get("/")
-        assert "Leaderboard" in resp.text
+        assert "Team" in resp.text
 
 
 class TestRepDetailPage:

@@ -17,7 +17,7 @@ class RepResponse(AppBase):
     display_name: str
 
 
-class RepLeaderboardRow(AppBase):
+class RepTeamRow(AppBase):
     email: str
     display_name: str
     avg_personalisation: Optional[float] = None

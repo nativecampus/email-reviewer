@@ -156,7 +156,7 @@ email-reviewer/
 │   ├── schemas/              # Pydantic request/response schemas
 │   │   ├── base.py           # AppBase with from_attributes config
 │   │   ├── email.py          # EmailCreate, EmailUpdate, EmailResponse
-│   │   ├── rep.py            # RepCreate, RepUpdate, RepResponse, RepLeaderboardRow
+│   │   ├── rep.py            # RepCreate, RepUpdate, RepResponse, RepTeamRow
 │   │   ├── score.py          # ScoringResult, ScoreCreate, ScoreUpdate, ScoreResponse
 │   │   ├── stats.py          # StatsResponse
 │   │   ├── settings.py       # SettingsResponse, SettingsUpdate
@@ -164,7 +164,7 @@ email-reviewer/
 │   ├── services/             # Business logic
 │   │   ├── export.py         # Excel export of scores and rep averages
 │   │   ├── fetcher.py        # HubSpot email fetch and upsert
-│   │   ├── rep.py            # Dashboard queries (leaderboard, rep emails, stats)
+│   │   ├── rep.py            # Dashboard queries (team, rep emails, stats)
 │   │   ├── scorer.py         # Claude API email scoring
 │   │   ├── settings.py       # Settings CRUD (get_settings, update_settings)
 │   │   └── job_runner.py     # Job execution (fetch, score, rescore, export)
@@ -172,7 +172,7 @@ email-reviewer/
 │   │   └── css/style.css     # Score colour utility classes
 │   ├── templates/            # Jinja2 HTML templates
 │   │   ├── base.html         # Layout with Tailwind CDN and nav
-│   │   ├── leaderboard.html  # Rep leaderboard table
+│   │   ├── team.html         # Rep team table
 │   │   ├── rep_detail.html   # Rep email list with expandable preview
 │   │   └── settings.html     # Settings form + operations panel
 │   └── templating.py         # Shared Jinja2Templates with cache-bust helper

@@ -2,19 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas.rep import RepLeaderboardRow
+from app.schemas.rep import RepTeamRow
 from app.schemas.score import ScoreResponse
 from app.schemas.stats import StatsResponse
-from app.services.rep import get_email_detail, get_leaderboard, get_rep_emails, get_stats
+from app.services.rep import get_email_detail, get_rep_emails, get_stats, get_team
 
 router = APIRouter(prefix="/api")
 
 
-@router.get("/reps", response_model=list[RepLeaderboardRow])
+@router.get("/reps", response_model=list[RepTeamRow])
 async def list_reps(session: AsyncSession = Depends(get_db)):
-    rows = await get_leaderboard(session)
+    rows = await get_team(session)
     return [
-        RepLeaderboardRow(
+        RepTeamRow(
             email=r.email,
             display_name=r.display_name,
             avg_personalisation=round(r.avg_personalisation, 2) if r.avg_personalisation else None,
