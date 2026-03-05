@@ -1,13 +1,14 @@
 """Job runners for fetch, score, rescore, and export operations."""
 
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings as app_config
+from app.models.base import _utcnow
 from app.database import AsyncSessionLocal
 from app.enums import JobStatus, JobType
 from app.models.email import Email
@@ -31,18 +32,18 @@ async def _session_scope(session: Optional[AsyncSession] = None):
 
 def _set_running(job: Job) -> None:
     job.status = JobStatus.RUNNING
-    job.started_at = datetime.now(timezone.utc)
+    job.started_at = _utcnow()
 
 
 def _set_completed(job: Job, result_summary: dict) -> None:
     job.status = JobStatus.COMPLETED
-    job.completed_at = datetime.now(timezone.utc)
+    job.completed_at = _utcnow()
     job.result_summary = result_summary
 
 
 def _set_failed(job: Job, error: str) -> None:
     job.status = JobStatus.FAILED
-    job.completed_at = datetime.now(timezone.utc)
+    job.completed_at = _utcnow()
     job.error_message = error
 
 
