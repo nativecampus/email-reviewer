@@ -29,6 +29,12 @@ def make_hubspot_email(
         "spaces for the upcoming student fair."
     ),
     hs_email_html=None,
+    hs_email_open_count=None,
+    hs_email_click_count=None,
+    hs_email_reply_count=None,
+    hs_email_headers_message_id=None,
+    hs_email_headers_in_reply_to=None,
+    hs_email_thread_id=None,
 ):
     """Build a single HubSpot email result object.
 
@@ -55,6 +61,12 @@ def make_hubspot_email(
             "hubspot_owner_id": hubspot_owner_id,
             "hs_email_text": hs_email_text,
             "hs_email_html": hs_email_html,
+            "hs_email_open_count": hs_email_open_count,
+            "hs_email_click_count": hs_email_click_count,
+            "hs_email_reply_count": hs_email_reply_count,
+            "hs_email_headers_message_id": hs_email_headers_message_id,
+            "hs_email_headers_in_reply_to": hs_email_headers_in_reply_to,
+            "hs_email_thread_id": hs_email_thread_id,
         },
         "createdAt": hs_createdate,
         "updatedAt": hs_createdate,

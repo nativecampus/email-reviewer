@@ -1,4 +1,4 @@
-"""Fetch outgoing emails from HubSpot and upsert into the database."""
+"""Fetch emails from HubSpot and upsert into the database."""
 
 import time
 from datetime import datetime
@@ -35,34 +35,49 @@ PROPERTIES = [
     "hs_email_tracker_key",
     "hubspot_owner_id",
     "hs_createdate",
+    "hs_email_open_count",
+    "hs_email_click_count",
+    "hs_email_reply_count",
+    "hs_email_headers_message_id",
+    "hs_email_headers_in_reply_to",
+    "hs_email_thread_id",
 ]
 
 
-def filter_outgoing_emails(
+def filter_relevant_emails(
     emails: list[dict], company_domains: list[str]
 ) -> list[dict]:
-    """Keep only outgoing emails sent from a company domain.
+    """Keep outgoing emails from a company domain and incoming emails to a company domain.
 
-    Filters on two criteria:
-    1. Direction must be EMAIL (drops INCOMING_EMAIL and FORWARDED_EMAIL).
-       FORWARDED_EMAIL means an email was forwarded to the CRM for logging,
-       not an outgoing sales email.
-    2. The from_email domain must be in the company_domains list.
+    - EMAIL: kept when from_email domain is in company_domains (outgoing from our rep).
+    - INCOMING_EMAIL: kept when to_email domain is in company_domains (reply to our rep).
+    - FORWARDED_EMAIL and anything else: dropped. FORWARDED_EMAIL means an email
+      was forwarded to the CRM for logging, not a sales interaction.
     """
-    allowed_directions = {"EMAIL"}
+    lower_domains = [d.lower() for d in company_domains]
     result = []
     for email in emails:
         props = email.get("properties", {})
         direction = props.get("hs_email_direction", "")
-        if direction not in allowed_directions:
-            continue
-        from_email = props.get("hs_email_from_email") or ""
-        if "@" not in from_email:
-            continue
-        domain = from_email.rsplit("@", 1)[1].lower()
-        if domain not in [d.lower() for d in company_domains]:
-            continue
-        result.append(email)
+
+        if direction == "EMAIL":
+            from_email = props.get("hs_email_from_email") or ""
+            if "@" not in from_email:
+                continue
+            domain = from_email.rsplit("@", 1)[1].lower()
+            if domain not in lower_domains:
+                continue
+            result.append(email)
+
+        elif direction == "INCOMING_EMAIL":
+            to_email = props.get("hs_email_to_email") or ""
+            if "@" not in to_email:
+                continue
+            domain = to_email.rsplit("@", 1)[1].lower()
+            if domain not in lower_domains:
+                continue
+            result.append(email)
+
     return result
 
 
@@ -113,6 +128,16 @@ def _parse_timestamp(value: str | None) -> datetime | None:
         return None
 
 
+def _coerce_int(value: str | None) -> int | None:
+    """Coerce a string to int, returning None for missing or non-numeric values."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
 def _parse_email(result: dict) -> dict:
     """Extract a flat email dict from a HubSpot search result object."""
     props = result.get("properties", {})
@@ -130,6 +155,12 @@ def _parse_email(result: dict) -> dict:
         "to_name": f"{to_first} {to_last}".strip(),
         "direction": props.get("hs_email_direction", ""),
         "body_text": props.get("hs_email_text", ""),
+        "open_count": _coerce_int(props.get("hs_email_open_count")),
+        "click_count": _coerce_int(props.get("hs_email_click_count")),
+        "reply_count": _coerce_int(props.get("hs_email_reply_count")),
+        "message_id": props.get("hs_email_headers_message_id"),
+        "in_reply_to": props.get("hs_email_headers_in_reply_to"),
+        "thread_id": props.get("hs_email_thread_id"),
     }
 
 
@@ -279,6 +310,9 @@ async def upsert_emails_to_db(
 ) -> int:
     """Upsert HubSpot email records and auto-create rep records.
 
+    Rep records are only created for outgoing emails (direction=EMAIL),
+    since the from_email on those is a company rep.
+
     Returns the number of emails upserted.
     """
     count = 0
@@ -292,42 +326,47 @@ async def upsert_emails_to_db(
         )
         existing = result.scalar_one_or_none()
 
+        field_values = {
+            "timestamp": parsed["timestamp"],
+            "subject": parsed["subject"],
+            "from_email": parsed["from_email"],
+            "from_name": parsed["from_name"],
+            "to_email": parsed["to_email"],
+            "to_name": parsed["to_name"],
+            "direction": parsed["direction"],
+            "body_text": parsed["body_text"],
+            "open_count": parsed["open_count"],
+            "click_count": parsed["click_count"],
+            "reply_count": parsed["reply_count"],
+            "message_id": parsed["message_id"],
+            "in_reply_to": parsed["in_reply_to"],
+            "thread_id": parsed["thread_id"],
+        }
+
         if existing:
-            existing.timestamp = parsed["timestamp"]
-            existing.subject = parsed["subject"]
-            existing.from_email = parsed["from_email"]
-            existing.from_name = parsed["from_name"]
-            existing.to_email = parsed["to_email"]
-            existing.to_name = parsed["to_name"]
-            existing.direction = parsed["direction"]
-            existing.body_text = parsed["body_text"]
+            for key, value in field_values.items():
+                setattr(existing, key, value)
         else:
             email = Email(
                 hubspot_id=hubspot_id,
-                timestamp=parsed["timestamp"],
-                subject=parsed["subject"],
-                from_email=parsed["from_email"],
-                from_name=parsed["from_name"],
-                to_email=parsed["to_email"],
-                to_name=parsed["to_name"],
-                direction=parsed["direction"],
-                body_text=parsed["body_text"],
                 fetched_at=datetime.utcnow(),
+                **field_values,
             )
             session.add(email)
 
-        # Auto-create rep if from_email is present
-        from_email = parsed["from_email"]
-        if from_email:
-            rep_result = await session.execute(
-                select(Rep).where(Rep.email == from_email)
-            )
-            if not rep_result.scalar_one_or_none():
-                rep = Rep(
-                    email=from_email,
-                    display_name=parsed["from_name"] or from_email,
+        # Auto-create rep only for outgoing emails
+        if parsed["direction"] == "EMAIL":
+            from_email = parsed["from_email"]
+            if from_email:
+                rep_result = await session.execute(
+                    select(Rep).where(Rep.email == from_email)
                 )
-                session.add(rep)
+                if not rep_result.scalar_one_or_none():
+                    rep = Rep(
+                        email=from_email,
+                        display_name=parsed["from_name"] or from_email,
+                    )
+                    session.add(rep)
 
         count += 1
 
@@ -343,13 +382,13 @@ async def fetch_and_store(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
 ) -> int:
-    """Fetch emails from HubSpot, filter outgoing, and upsert to DB.
+    """Fetch emails from HubSpot, filter relevant, and upsert to DB.
 
-    max_count limits the number of filtered outgoing emails stored, not the
+    max_count limits the number of filtered emails stored, not the
     number of raw results fetched from HubSpot. Returns the number of emails
     stored.
     """
-    # Fetch 1.5x max_count to account for non-outgoing emails being filtered out
+    # Fetch 1.5x max_count to account for irrelevant emails being filtered out
     raw_limit = int(max_count * 1.5) if max_count is not None else None
     raw_emails = fetch_emails_from_hubspot(
         access_token,
@@ -357,7 +396,7 @@ async def fetch_and_store(
         end_date=end_date,
         max_results=raw_limit,
     )
-    outgoing = filter_outgoing_emails(raw_emails, company_domains)
+    relevant = filter_relevant_emails(raw_emails, company_domains)
     if max_count is not None:
-        outgoing = outgoing[:max_count]
-    return await upsert_emails_to_db(session, outgoing)
+        relevant = relevant[:max_count]
+    return await upsert_emails_to_db(session, relevant)

@@ -9,7 +9,7 @@ from app.services.fetcher import (
     _parse_timestamp,
     fetch_and_store,
     fetch_emails_from_hubspot,
-    filter_outgoing_emails,
+    filter_relevant_emails,
     upsert_emails_to_db,
 )
 from tests.fixtures.hubspot import (
@@ -26,49 +26,65 @@ from tests.fixtures.hubspot import (
 COMPANY_DOMAINS = ["nativecampusadvertising.com", "native.fm"]
 
 
-class TestFilterOutgoingEmails:
-    def test_keeps_email_direction(self):
+class TestFilterRelevantEmails:
+    def test_keeps_outgoing_email_from_company_domain(self):
         emails = [OUTGOING_SALES_EMAIL]
-        result = filter_outgoing_emails(emails, COMPANY_DOMAINS)
+        result = filter_relevant_emails(emails, COMPANY_DOMAINS)
         assert len(result) == 1
         assert result[0]["id"] == OUTGOING_SALES_EMAIL["id"]
 
-    def test_drops_forwarded_email_direction(self):
+    def test_keeps_incoming_email_to_company_domain(self):
+        result = filter_relevant_emails([INCOMING_EMAIL], COMPANY_DOMAINS)
+        assert len(result) == 1
+        assert result[0]["id"] == INCOMING_EMAIL["id"]
+
+    def test_keeps_incoming_reply_to_company_domain(self):
+        result = filter_relevant_emails([INCOMING_REPLY], COMPANY_DOMAINS)
+        assert len(result) == 1
+        assert result[0]["id"] == INCOMING_REPLY["id"]
+
+    def test_drops_incoming_email_to_non_company_domain(self):
+        incoming_external = make_hubspot_email(
+            id="incoming-ext",
+            hs_email_direction="INCOMING_EMAIL",
+            hs_email_from_email="someone@gmail.com",
+            hs_email_to_email="contact@otherbusiness.com",
+        )
+        result = filter_relevant_emails([incoming_external], COMPANY_DOMAINS)
+        assert result == []
+
+    def test_drops_forwarded_email_regardless_of_domain(self):
         forwarded_from_company = make_hubspot_email(
             id="fwd-company",
             hs_email_direction="FORWARDED_EMAIL",
             hs_email_from_email="rep@nativecampusadvertising.com",
         )
-        result = filter_outgoing_emails([forwarded_from_company], COMPANY_DOMAINS)
+        result = filter_relevant_emails([forwarded_from_company], COMPANY_DOMAINS)
         assert result == []
 
-    def test_drops_incoming_email_direction(self):
-        result = filter_outgoing_emails([INCOMING_EMAIL], COMPANY_DOMAINS)
+    def test_drops_forwarded_email_to_company_domain(self):
+        result = filter_relevant_emails([FORWARDED_EMAIL], COMPANY_DOMAINS)
         assert result == []
 
-    def test_drops_email_from_non_company_domain(self):
+    def test_drops_outgoing_email_from_non_company_domain(self):
         external = make_hubspot_email(
             id="external",
             hs_email_direction="EMAIL",
             hs_email_from_email="someone@gmail.com",
         )
-        result = filter_outgoing_emails([external], COMPANY_DOMAINS)
+        result = filter_relevant_emails([external], COMPANY_DOMAINS)
         assert result == []
 
-    def test_keeps_email_from_nativecampusadvertising(self):
-        result = filter_outgoing_emails([OUTGOING_SALES_EMAIL], COMPANY_DOMAINS)
-        assert len(result) == 1
-
     def test_keeps_email_from_native_fm(self):
-        result = filter_outgoing_emails([NATIVE_FM_EMAIL], COMPANY_DOMAINS)
+        result = filter_relevant_emails([NATIVE_FM_EMAIL], COMPANY_DOMAINS)
         assert len(result) == 1
 
     def test_returns_empty_list_for_empty_input(self):
-        result = filter_outgoing_emails([], COMPANY_DOMAINS)
+        result = filter_relevant_emails([], COMPANY_DOMAINS)
         assert result == []
 
     def test_drops_null_from_email(self):
-        result = filter_outgoing_emails([NULL_METADATA_EMAIL], COMPANY_DOMAINS)
+        result = filter_relevant_emails([NULL_METADATA_EMAIL], COMPANY_DOMAINS)
         assert result == []
 
     def test_mixed_input_filters_correctly(self):
@@ -80,12 +96,14 @@ class TestFilterOutgoingEmails:
             FORWARDED_EMAIL,
             NULL_METADATA_EMAIL,
         ]
-        result = filter_outgoing_emails(emails, COMPANY_DOMAINS)
+        result = filter_relevant_emails(emails, COMPANY_DOMAINS)
         result_ids = {e["id"] for e in result}
         assert OUTGOING_SALES_EMAIL["id"] in result_ids
         assert NATIVE_FM_EMAIL["id"] in result_ids
-        assert INCOMING_EMAIL["id"] not in result_ids
-        assert INCOMING_REPLY["id"] not in result_ids
+        assert INCOMING_EMAIL["id"] in result_ids
+        assert INCOMING_REPLY["id"] in result_ids
+        assert FORWARDED_EMAIL["id"] not in result_ids
+        assert NULL_METADATA_EMAIL["id"] not in result_ids
 
 
 class TestUpsertEmailsToDb:
@@ -138,6 +156,84 @@ class TestUpsertEmailsToDb:
         result = await db.execute(select(Rep))
         reps = result.scalars().all()
         assert len(reps) == 1
+
+    async def test_stores_engagement_fields(self, db):
+        email = make_hubspot_email(
+            id="engagement-test",
+            hs_email_open_count="5",
+            hs_email_click_count="3",
+            hs_email_reply_count="1",
+        )
+        await upsert_emails_to_db(db, [email])
+
+        result = await db.execute(select(Email))
+        row = result.scalar_one()
+        assert row.open_count == 5
+        assert row.click_count == 3
+        assert row.reply_count == 1
+
+    async def test_stores_threading_fields(self, db):
+        email = make_hubspot_email(
+            id="threading-test",
+            hs_email_headers_message_id="<abc@example.com>",
+            hs_email_headers_in_reply_to="<def@example.com>",
+            hs_email_thread_id="thread-123",
+        )
+        await upsert_emails_to_db(db, [email])
+
+        result = await db.execute(select(Email))
+        row = result.scalar_one()
+        assert row.message_id == "<abc@example.com>"
+        assert row.in_reply_to == "<def@example.com>"
+        assert row.thread_id == "thread-123"
+
+    async def test_stores_none_for_absent_engagement_and_threading_fields(self, db):
+        email = make_hubspot_email(id="no-extras")
+        await upsert_emails_to_db(db, [email])
+
+        result = await db.execute(select(Email))
+        row = result.scalar_one()
+        assert row.open_count is None
+        assert row.click_count is None
+        assert row.reply_count is None
+        assert row.message_id is None
+        assert row.in_reply_to is None
+        assert row.thread_id is None
+
+    async def test_creates_rep_only_for_outgoing_emails(self, db):
+        outgoing = make_hubspot_email(
+            id="out-1",
+            hs_email_direction="EMAIL",
+            hs_email_from_email="rep@nativecampusadvertising.com",
+        )
+        incoming = make_hubspot_email(
+            id="in-1",
+            hs_email_direction="INCOMING_EMAIL",
+            hs_email_from_email="external@gmail.com",
+            hs_email_to_email="rep@nativecampusadvertising.com",
+        )
+        await upsert_emails_to_db(db, [outgoing, incoming])
+
+        result = await db.execute(select(Rep))
+        reps = result.scalars().all()
+        assert len(reps) == 1
+        assert reps[0].email == "rep@nativecampusadvertising.com"
+
+    async def test_stores_direction_on_email_record(self, db):
+        outgoing = make_hubspot_email(
+            id="dir-out", hs_email_direction="EMAIL"
+        )
+        incoming = make_hubspot_email(
+            id="dir-in", hs_email_direction="INCOMING_EMAIL",
+            hs_email_from_email="ext@gmail.com",
+        )
+        await upsert_emails_to_db(db, [outgoing, incoming])
+
+        result = await db.execute(select(Email).order_by(Email.hubspot_id))
+        rows = result.scalars().all()
+        directions = {r.hubspot_id: r.direction for r in rows}
+        assert directions["dir-in"] == "INCOMING_EMAIL"
+        assert directions["dir-out"] == "EMAIL"
 
 
 class TestFetchEmailsFromHubspot:
@@ -362,11 +458,13 @@ class TestFetchAndStoreMaxCount:
             make_hubspot_email(id="out-2", hs_email_direction="EMAIL",
                                hs_email_from_email="rep2@nativecampusadvertising.com"),
             make_hubspot_email(id="in-1", hs_email_direction="INCOMING_EMAIL",
-                               hs_email_from_email="external@gmail.com"),
+                               hs_email_from_email="external@gmail.com",
+                               hs_email_to_email="rep@nativecampusadvertising.com"),
             make_hubspot_email(id="out-3", hs_email_direction="EMAIL",
                                hs_email_from_email="rep3@nativecampusadvertising.com"),
             make_hubspot_email(id="in-2", hs_email_direction="INCOMING_EMAIL",
-                               hs_email_from_email="other@yahoo.com"),
+                               hs_email_from_email="other@yahoo.com",
+                               hs_email_to_email="rep2@nativecampusadvertising.com"),
             make_hubspot_email(id="out-4", hs_email_direction="EMAIL",
                                hs_email_from_email="rep4@nativecampusadvertising.com"),
         ]

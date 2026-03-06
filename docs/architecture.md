@@ -176,12 +176,12 @@ Managed by Alembic with async support. The `alembic/env.py` file converts Postgr
 
 ## Fetcher
 
-`app/services/fetcher.py` ingests outgoing sales emails from the HubSpot CRM v3 search API. The entry point is `fetch_and_store(session, access_token, company_domains, ...)`, which:
+`app/services/fetcher.py` ingests outgoing and incoming emails from the HubSpot CRM v3 search API. The entry point is `fetch_and_store(session, access_token, company_domains, ...)`, which:
 
-1. Calls `fetch_emails_from_hubspot()` to paginate through HubSpot search results with retry logic (exponential backoff on errors, respects `Retry-After` on 429s). When `max_count` is set, passes `max_results=int(max_count * 1.5)` to stop pagination early — the 1.5x multiplier accounts for non-outgoing emails that will be filtered out. HubSpot's search API has a 10,000 result paging limit; when hit, the fetcher automatically subdivides the date range into halves and fetches each recursively, deduplicating by HubSpot ID at the boundary.
-2. Calls `filter_outgoing_emails()` to keep only emails with direction EMAIL sent from a company domain. FORWARDED_EMAIL records (emails forwarded to the CRM for logging) are excluded since they are not outgoing sales emails.
+1. Calls `fetch_emails_from_hubspot()` to paginate through HubSpot search results with retry logic (exponential backoff on errors, respects `Retry-After` on 429s). When `max_count` is set, passes `max_results=int(max_count * 1.5)` to stop pagination early — the 1.5x multiplier accounts for irrelevant emails that will be filtered out. HubSpot's search API has a 10,000 result paging limit; when hit, the fetcher automatically subdivides the date range into halves and fetches each recursively, deduplicating by HubSpot ID at the boundary.
+2. Calls `filter_relevant_emails()` to keep emails involving company reps. EMAIL direction is kept when the from_email domain is in company_domains (outgoing from our rep). INCOMING_EMAIL direction is kept when the to_email domain is in company_domains (reply to our rep). FORWARDED_EMAIL and all other directions are dropped.
 3. Applies `max_count` (if provided) to the filtered list, limiting stored emails.
-4. Calls `upsert_emails_to_db()` to upsert on `hubspot_id` and auto-create Rep records for new sender addresses. Parses `hs_timestamp` from HubSpot into the `timestamp` column.
+4. Calls `upsert_emails_to_db()` to upsert on `hubspot_id` and auto-create Rep records for new sender addresses (outgoing emails only). Parses `hs_timestamp` from HubSpot into the `timestamp` column. Stores engagement metrics (open_count, click_count, reply_count) and threading headers (message_id, in_reply_to, thread_id).
 
 Returns the number of emails stored.
 
@@ -286,7 +286,7 @@ Shared `Jinja2Templates` instance with a `static_url()` global that appends an M
 Settings control the behaviour of fetch and score operations:
 
 - `global_start_date` — floor for all HubSpot fetches. The effective start date for a fetch is `max(global_start_date, max_fetched_at_in_db or global_start_date)`.
-- `company_domains` — comma-separated list passed to `filter_outgoing_emails`.
+- `company_domains` — comma-separated list passed to `filter_relevant_emails`.
 - `scoring_batch_size` — concurrency limit for the Claude API semaphore.
 - `auto_score_after_fetch` — when true, a fetch operation automatically scores unscored emails on completion.
 - `initial_email_prompt` — configurable system prompt for individual email scoring. Defaults to four-dimension scoring (personalisation, clarity, value_proposition, cta).
