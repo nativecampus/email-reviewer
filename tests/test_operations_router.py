@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -9,6 +10,13 @@ from app.models.job import Job
 from app.routers.operations import STALE_PENDING_MINUTES
 from app.worker import redis_available
 from tests.conftest import TestingSessionLocal
+
+
+@asynccontextmanager
+async def _test_worker_session():
+    """Replacement for worker_session that uses the test database."""
+    async with TestingSessionLocal() as session:
+        yield session
 
 
 class TestPostOperations:
@@ -280,7 +288,7 @@ class TestJobExecutionIntegration:
     """
 
     @patch("app.services.job_runner.fetch_and_store", new_callable=AsyncMock, return_value=3)
-    @patch("app.services.job_runner.AsyncSessionLocal", TestingSessionLocal)
+    @patch("app.services.job_runner.worker_session", _test_worker_session)
     async def test_fetch_job_completes_via_background_task(self, mock_fetch, client, db):
         await db.execute(
             select(Job)  # ensure settings seeded
@@ -297,7 +305,7 @@ class TestJobExecutionIntegration:
         assert job.completed_at is not None
 
     @patch("app.services.job_runner.score_unscored_emails", new_callable=AsyncMock)
-    @patch("app.services.job_runner.AsyncSessionLocal", TestingSessionLocal)
+    @patch("app.services.job_runner.worker_session", _test_worker_session)
     async def test_score_job_completes_via_background_task(self, mock_score, client, db):
         mock_score.return_value = {
             "scored": 5, "auto_scored": 0, "errors": 0,
@@ -313,7 +321,7 @@ class TestJobExecutionIntegration:
         assert job.result_summary["scored"] == 5
 
     @patch("app.services.job_runner.export_to_excel", new_callable=AsyncMock, return_value="/tmp/export.xlsx")
-    @patch("app.services.job_runner.AsyncSessionLocal", TestingSessionLocal)
+    @patch("app.services.job_runner.worker_session", _test_worker_session)
     async def test_export_job_completes_via_background_task(self, mock_export, client, db):
         resp = await client.post("/api/operations/export")
         assert resp.status_code == 202
@@ -325,7 +333,7 @@ class TestJobExecutionIntegration:
         assert job.result_summary["output_path"] == "/tmp/export.xlsx"
 
     @patch("app.services.job_runner.fetch_and_store", new_callable=AsyncMock)
-    @patch("app.services.job_runner.AsyncSessionLocal", TestingSessionLocal)
+    @patch("app.services.job_runner.worker_session", _test_worker_session)
     async def test_failed_job_persists_error_via_background_task(self, mock_fetch, client, db):
         mock_fetch.side_effect = RuntimeError("HubSpot API key invalid")
         resp = await client.post("/api/operations/fetch")
@@ -338,7 +346,7 @@ class TestJobExecutionIntegration:
         assert "HubSpot API key invalid" in job.error_message
 
     @patch("app.services.job_runner.score_unscored_emails", new_callable=AsyncMock)
-    @patch("app.services.job_runner.AsyncSessionLocal", TestingSessionLocal)
+    @patch("app.services.job_runner.worker_session", _test_worker_session)
     async def test_rescore_job_completes_via_background_task(self, mock_score, client, db):
         mock_score.return_value = {
             "scored": 2, "auto_scored": 0, "errors": 0,

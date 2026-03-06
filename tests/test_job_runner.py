@@ -346,6 +346,22 @@ class TestRunFetchJobWithParams:
         assert max_count is None
 
 
+class TestFailJob:
+    async def test_fail_job_records_error_after_rollback(self, db, make_job):
+        job = await make_job(job_type=JobType.SCORE)
+        await db.commit()
+
+        from app.services.job_runner import _fail_job
+
+        await _fail_job(db, job.job_id, RuntimeError("something broke"))
+
+        result = await db.execute(select(Job).where(Job.job_id == job.job_id))
+        updated = result.scalar_one()
+        assert updated.status == JobStatus.FAILED
+        assert "something broke" in updated.error_message
+        assert updated.completed_at is not None
+
+
 class TestRunScoreJob:
     @patch("app.services.job_runner.score_unscored_emails", new_callable=AsyncMock)
     async def test_sets_running_then_completed(self, mock_score, db, make_job):
@@ -456,3 +472,54 @@ class TestRunRescoreJob:
         # score_unscored_emails is called after deleting all scores,
         # so it should score all emails (both were previously scored)
         mock_score.assert_called_once()
+
+
+class TestRunScoreJobFailure:
+    @patch("app.services.job_runner.score_unscored_emails", new_callable=AsyncMock)
+    async def test_sets_failed_on_scorer_exception(self, mock_score, db, make_job):
+        mock_score.side_effect = RuntimeError("Claude API unreachable")
+        job = await make_job(job_type=JobType.SCORE)
+        await db.commit()
+
+        from app.services.job_runner import run_score_job
+
+        await run_score_job(db, job.job_id)
+
+        result = await db.execute(select(Job).where(Job.job_id == job.job_id))
+        updated = result.scalar_one()
+        assert updated.status == JobStatus.FAILED
+        assert "Claude API unreachable" in updated.error_message
+
+
+class TestRunRescoreJobFailure:
+    @patch("app.services.job_runner.score_unscored_emails", new_callable=AsyncMock)
+    async def test_sets_failed_on_scorer_exception(self, mock_score, db, make_job):
+        mock_score.side_effect = RuntimeError("Claude API unreachable")
+        job = await make_job(job_type=JobType.RESCORE)
+        await db.commit()
+
+        from app.services.job_runner import run_rescore_job
+
+        await run_rescore_job(db, job.job_id)
+
+        result = await db.execute(select(Job).where(Job.job_id == job.job_id))
+        updated = result.scalar_one()
+        assert updated.status == JobStatus.FAILED
+        assert "Claude API unreachable" in updated.error_message
+
+
+class TestRunExportJobFailure:
+    @patch("app.services.job_runner.export_to_excel", new_callable=AsyncMock)
+    async def test_sets_failed_on_export_exception(self, mock_export, db, make_job):
+        mock_export.side_effect = RuntimeError("Disk full")
+        job = await make_job(job_type=JobType.EXPORT)
+        await db.commit()
+
+        from app.services.job_runner import run_export_job
+
+        await run_export_job(db, job.job_id)
+
+        result = await db.execute(select(Job).where(Job.job_id == job.job_id))
+        updated = result.scalar_one()
+        assert updated.status == JobStatus.FAILED
+        assert "Disk full" in updated.error_message

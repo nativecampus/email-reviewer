@@ -1,5 +1,6 @@
 """Job runners for fetch, score, rescore, and export operations."""
 
+import logging
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Optional
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings as app_config
 from app.models.base import _utcnow
-from app.database import AsyncSessionLocal
+from app.database import worker_session
 from app.enums import JobStatus, JobType
 from app.models.email import Email
 from app.models.job import Job
@@ -19,19 +20,21 @@ from app.services.fetcher import fetch_and_store
 from app.services.scorer import score_unscored_emails
 from app.services.settings import get_settings
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def _session_scope(session: Optional[AsyncSession] = None):
     """Yield the provided session or create a new one, committing on exit.
 
-    Job runners catch their own exceptions and persist failure state via flush(),
-    so commit is always appropriate when the context manager exits normally.
+    When session is None (RQ worker), creates a fresh engine and session via
+    worker_session() to avoid event loop mismatch with the module-level engine.
     """
     if session is not None:
         yield session
         await session.commit()
     else:
-        async with AsyncSessionLocal() as new_session:
+        async with worker_session() as new_session:
             yield new_session
             await new_session.commit()
 
@@ -53,6 +56,27 @@ def _set_failed(job: Job, error: str) -> None:
     job.error_message = error
 
 
+async def _fail_job(session: AsyncSession, job_id: int, exc: Exception) -> None:
+    """Record a job failure, handling cases where the session may be dirty.
+
+    Rolls back any pending changes, then loads the job fresh and sets FAILED.
+    If even the failure recording fails (e.g. DB unreachable), logs the error
+    so it's visible in worker output.
+    """
+    error_msg = str(exc)
+    try:
+        await session.rollback()
+        result = await session.execute(select(Job).where(Job.job_id == job_id))
+        job = result.scalar_one()
+        _set_failed(job, error_msg)
+        await session.flush()
+    except Exception as inner:
+        logger.error(
+            "Job %d failed with: %s. Additionally failed to record error: %s",
+            job_id, error_msg, inner,
+        )
+
+
 async def run_fetch_job(
     session: Optional[AsyncSession],
     job_id: int,
@@ -63,12 +87,12 @@ async def run_fetch_job(
     auto_score: Optional[bool] = None,
 ) -> None:
     async with _session_scope(session) as s:
-        result = await s.execute(select(Job).where(Job.job_id == job_id))
-        job = result.scalar_one()
-        _set_running(job)
-        await s.flush()
-
         try:
+            result = await s.execute(select(Job).where(Job.job_id == job_id))
+            job = result.scalar_one()
+            _set_running(job)
+            await s.flush()
+
             settings = await get_settings(s)
             company_domains = [
                 d.strip() for d in settings.company_domains.split(",") if d.strip()
@@ -138,20 +162,19 @@ async def run_fetch_job(
             await s.flush()
 
         except Exception as exc:
-            _set_failed(job, str(exc))
-            await s.flush()
+            await _fail_job(s, job_id, exc)
 
 
 async def run_score_job(
     session: Optional[AsyncSession], job_id: int
 ) -> None:
     async with _session_scope(session) as s:
-        result = await s.execute(select(Job).where(Job.job_id == job_id))
-        job = result.scalar_one()
-        _set_running(job)
-        await s.flush()
-
         try:
+            result = await s.execute(select(Job).where(Job.job_id == job_id))
+            job = result.scalar_one()
+            _set_running(job)
+            await s.flush()
+
             settings = await get_settings(s)
             score_result = await score_unscored_emails(
                 s, batch_size=settings.scoring_batch_size
@@ -167,20 +190,19 @@ async def run_score_job(
             await s.flush()
 
         except Exception as exc:
-            _set_failed(job, str(exc))
-            await s.flush()
+            await _fail_job(s, job_id, exc)
 
 
 async def run_rescore_job(
     session: Optional[AsyncSession], job_id: int
 ) -> None:
     async with _session_scope(session) as s:
-        result = await s.execute(select(Job).where(Job.job_id == job_id))
-        job = result.scalar_one()
-        _set_running(job)
-        await s.flush()
-
         try:
+            result = await s.execute(select(Job).where(Job.job_id == job_id))
+            job = result.scalar_one()
+            _set_running(job)
+            await s.flush()
+
             # Delete all existing scores
             await s.execute(delete(Score))
             await s.flush()
@@ -200,8 +222,7 @@ async def run_rescore_job(
             await s.flush()
 
         except Exception as exc:
-            _set_failed(job, str(exc))
-            await s.flush()
+            await _fail_job(s, job_id, exc)
 
 
 async def run_export_job(
@@ -210,16 +231,15 @@ async def run_export_job(
     output_path: str = "export.xlsx",
 ) -> None:
     async with _session_scope(session) as s:
-        result = await s.execute(select(Job).where(Job.job_id == job_id))
-        job = result.scalar_one()
-        _set_running(job)
-        await s.flush()
-
         try:
+            result = await s.execute(select(Job).where(Job.job_id == job_id))
+            job = result.scalar_one()
+            _set_running(job)
+            await s.flush()
+
             path = await export_to_excel(s, output_path)
             _set_completed(job, {"output_path": path})
             await s.flush()
 
         except Exception as exc:
-            _set_failed(job, str(exc))
-            await s.flush()
+            await _fail_job(s, job_id, exc)
