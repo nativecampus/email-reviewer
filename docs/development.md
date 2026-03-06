@@ -193,6 +193,8 @@ email-reviewer/
 │   ├── tasks.py              # Synchronous RQ task wrappers (fetch, score, rescore, export)
 │   ├── models/               # SQLAlchemy ORM models
 │   │   ├── base.py           # DeclarativeBase, AuditMixin, event listeners
+│   │   ├── chain.py          # EmailChain model (conversation threads)
+│   │   ├── chain_score.py    # ChainScore model (chain-level scoring)
 │   │   ├── email.py          # Email model
 │   │   ├── rep.py            # Rep model
 │   │   ├── score.py          # Score model
@@ -207,6 +209,8 @@ email-reviewer/
 │   │   ├── base.py           # AppBase with from_attributes config
 │   │   ├── email.py          # EmailCreate, EmailUpdate, EmailResponse
 │   │   ├── rep.py            # RepCreate, RepUpdate, RepResponse, RepTeamRow
+│   │   ├── chain.py          # EmailChainCreate, EmailChainUpdate, EmailChainResponse
+│   │   ├── chain_score.py    # ChainScoringResult, ChainScoreCreate, ChainScoreUpdate, ChainScoreResponse
 │   │   ├── score.py          # ScoringResult, ScoreCreate, ScoreUpdate, ScoreResponse
 │   │   ├── stats.py          # StatsResponse
 │   │   ├── settings.py       # SettingsResponse, SettingsUpdate
@@ -255,6 +259,7 @@ email-reviewer/
 │   ├── test_main.py          # Health endpoint
 │   ├── test_enums.py         # Enum values
 │   ├── test_models.py        # Model registration and relationships
+│   ├── test_chain_schema.py  # Chain score schema validation
 │   ├── test_email_schema.py  # Schema validation
 │   ├── test_api_router.py    # JSON API endpoints
 │   ├── test_dashboard_router.py # HTML dashboard views

@@ -53,8 +53,7 @@ class TestScoreSingleEmail:
             "clarity": 8,
             "value_proposition": 6,
             "cta": 5,
-            "overall": 7,
-            "notes": "Good email overall.",
+            "notes": "Good email.",
         })
         mock_message = MagicMock()
         mock_message.content = [MagicMock(text=valid_json)]
@@ -74,8 +73,7 @@ class TestScoreSingleEmail:
         assert result.clarity == 8
         assert result.value_proposition == 6
         assert result.cta == 5
-        assert result.overall == 7
-        assert result.notes == "Good email overall."
+        assert result.notes == "Good email."
 
     async def test_retries_once_on_invalid_json_then_succeeds(self):
         valid_json = json.dumps({
@@ -83,7 +81,6 @@ class TestScoreSingleEmail:
             "clarity": 6,
             "value_proposition": 7,
             "cta": 8,
-            "overall": 6,
             "notes": "Decent.",
         })
         garbage_message = MagicMock()
@@ -129,7 +126,6 @@ class TestScoreSingleEmail:
             "clarity": 8,
             "value_proposition": 6,
             "cta": 5,
-            "overall": 7,
             "notes": "Good email.",
         })
         valid_message = MagicMock()
@@ -151,7 +147,7 @@ class TestScoreSingleEmail:
         result = await _score_single_email(mock_client, email, semaphore)
 
         assert result is not None
-        assert result.overall == 7
+        assert result.personalisation == 7
         mock_sleep.assert_called_once_with(42.0)
 
     @patch("app.services.scorer.asyncio.sleep", new_callable=AsyncMock)
@@ -163,7 +159,6 @@ class TestScoreSingleEmail:
             "clarity": 5,
             "value_proposition": 5,
             "cta": 5,
-            "overall": 5,
             "notes": "Ok.",
         })
         valid_message = MagicMock()

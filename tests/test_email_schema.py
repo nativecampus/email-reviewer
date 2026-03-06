@@ -12,7 +12,6 @@ VALID_SCORING_RESULT = {
     "clarity": 5,
     "value_proposition": 5,
     "cta": 5,
-    "overall": 5,
     "notes": "Solid email.",
 }
 
@@ -21,7 +20,6 @@ SCORE_FIELDS = [
     "clarity",
     "value_proposition",
     "cta",
-    "overall",
 ]
 
 

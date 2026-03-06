@@ -1,4 +1,4 @@
-from app.enums import EmailDirection
+from app.enums import EmailDirection, JobType
 
 
 class TestEmailDirection:
@@ -14,3 +14,11 @@ class TestEmailDirection:
 
     def test_has_exactly_three_members(self):
         assert len(EmailDirection) == 3
+
+
+class TestJobType:
+    def test_includes_chain_build(self):
+        assert hasattr(JobType, "CHAIN_BUILD")
+
+    def test_chain_build_serialises_as_string(self):
+        assert str(JobType.CHAIN_BUILD) == "Chain_Build"

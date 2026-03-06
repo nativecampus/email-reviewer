@@ -193,7 +193,6 @@ async def score_unscored_emails(
                     clarity=scoring_result.clarity,
                     value_proposition=scoring_result.value_proposition,
                     cta=scoring_result.cta,
-                    overall=scoring_result.overall,
                     notes=scoring_result.notes,
                     score_error=False,
                     scored_at=datetime.utcnow(),

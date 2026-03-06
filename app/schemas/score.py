@@ -10,7 +10,6 @@ SCORE_FIELDS = [
     "clarity",
     "value_proposition",
     "cta",
-    "overall",
 ]
 
 
@@ -25,7 +24,6 @@ class ScoringResult(BaseModel):
     clarity: int
     value_proposition: int
     cta: int
-    overall: int
     notes: str
 
     @field_validator(*SCORE_FIELDS)

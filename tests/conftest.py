@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import get_db
 from app.main import app
-from app.models import Email, Job, Rep, Score, Settings  # noqa: F401 — registers tables
+from app.models import ChainScore, Email, EmailChain, Job, Rep, Score, Settings  # noqa: F401 — registers tables
 from app.models.base import Base
 from tests.fixtures.hubspot import make_hubspot_email, make_hubspot_response
 
@@ -153,6 +153,46 @@ def make_job(db):
         db.add(job)
         await db.flush()
         return job
+
+    return _make
+
+
+@pytest.fixture()
+def make_chain(db):
+    async def _make(**overrides):
+        defaults = {
+            "normalized_subject": "Test Subject",
+            "participants": "alice@example.com,bob@example.com",
+            "email_count": 2,
+            "outgoing_count": 1,
+            "incoming_count": 1,
+        }
+        defaults.update(overrides)
+        chain = EmailChain(**defaults)
+        db.add(chain)
+        await db.flush()
+        return chain
+
+    return _make
+
+
+@pytest.fixture()
+def make_chain_score(db, make_chain):
+    async def _make(**overrides):
+        if "chain_id" not in overrides:
+            chain = await make_chain()
+            overrides["chain_id"] = chain.id
+        defaults = {
+            "progression": 7,
+            "responsiveness": 8,
+            "persistence": 6,
+            "conversation_quality": 7,
+        }
+        defaults.update(overrides)
+        chain_score = ChainScore(**defaults)
+        db.add(chain_score)
+        await db.flush()
+        return chain_score
 
     return _make
 
