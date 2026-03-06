@@ -187,18 +187,41 @@ Returns the number of emails stored.
 
 ## Scorer
 
-`app/services/scorer.py` scores unscored emails via the Claude API (claude-sonnet-4-20250514). The entry point is `score_unscored_emails(session, batch_size=5)`, which:
+`app/services/scorer.py` scores unscored emails and conversation chains via the Claude API (claude-sonnet-4-20250514).
+
+### Individual Email Scoring
+
+The entry point is `score_unscored_emails(session, batch_size=5)`, which:
 
 1. Queries emails with no matching score record (LEFT JOIN scores WHERE NULL).
 2. Skips emails with empty or very short bodies (under 20 words) — no score row is created since there is no content to evaluate.
-3. Sends remaining emails to Claude concurrently, capped by an asyncio semaphore (`batch_size`).
-4. Retries on rate limit (429) errors using the `retry-after` header from the API response, up to 5 attempts. Falls back to 60 seconds when the header is missing.
-5. Retries once on JSON parse failure. After two consecutive failures, writes a score row with `score_error=True`.
-6. Returns a summary dict with counts (`total_unscored`, `scored`, `skipped`, `errors`) and token usage.
+3. Loads the scoring prompt from settings: `initial_email_prompt` for standalone emails or first-in-chain, `chain_email_prompt` for follow-up emails (position_in_chain > 1).
+4. For follow-up emails, pre-builds chain context via `_build_chain_context()` — prior emails in the chain, each truncated to 2000 characters, included as a "Previous conversation" section in the user message.
+5. Sends remaining emails to Claude concurrently, capped by an asyncio semaphore (`batch_size`).
+6. Retries on rate limit (429) errors using the `retry-after` header from the API response, up to 5 attempts. Falls back to 60 seconds when the header is missing.
+7. Retries once on JSON parse failure. After two consecutive failures, writes a score row with `score_error=True`.
+8. Parses 4 dimensions from Claude (personalisation, clarity, value_proposition, cta) via the `ScoringResult` Pydantic model. Calculates `overall` as a weighted average using weights from settings via `_calculate_weighted_overall()`. Stores all 5 values in the scores table.
+9. Calls `score_unscored_chains()` after individual scoring.
+10. Returns a summary dict with counts (`total_unscored`, `scored`, `skipped`, `errors`, `chains_scored`, `chain_errors`) and token usage.
 
-`_build_user_message(email)` formats the email's From, To, Subject, Date, and Body fields into a prompt string. Body text is truncated to 4000 characters.
+`_calculate_weighted_overall(scores, weights)` is a pure function that computes the weighted sum of the 4 dimensions, rounds to the nearest integer, and clamps the result to 1-10.
 
-`SCORING_SYSTEM_PROMPT` instructs Claude to return a JSON object with four 1-10 scores (personalisation, clarity, value_proposition, cta) and a notes field. The overall score is now app-calculated from configurable weights in settings. Responses are validated through the `ScoringResult` Pydantic model.
+`_build_user_message(email)` formats the email's From, To, Subject, Date, and Body fields into a prompt string. Body text is truncated to 4000 characters. For follow-up emails, a "Previous conversation" section with chain context is prepended.
+
+`_build_chain_context(session, email)` fetches all prior emails in the same chain (by position), formats each with From/To/Date/Subject/Body (body truncated to 2000 chars), and joins them with separators. Returns empty string for emails without a chain or at position 1.
+
+`DEFAULT_INITIAL_PROMPT` is a module-level constant preserved as the default value for `settings.initial_email_prompt`. Actual scoring always reads the prompt from settings.
+
+### Chain-Level Scoring
+
+`score_unscored_chains(session, batch_size=5)` scores conversation chains that have no chain_score record and have email_count >= 2:
+
+1. Builds full conversation context from all chain emails.
+2. Sends to Claude with `settings.chain_evaluation_prompt`.
+3. Parses 4 chain dimensions (progression, responsiveness, persistence, conversation_quality) via `ChainScoringResult`.
+4. Computes `avg_response_hours` from timestamps of consecutive outgoing emails.
+5. Retries once on parse failure. After two failures, writes a chain_score with `score_error=True`.
+6. Returns a summary dict with `chains_scored`, `errors`, and token usage.
 
 ## Chain Builder
 
@@ -321,7 +344,7 @@ Validation lives in the `SettingsUpdate` Pydantic schema: `global_start_date` ca
 
 - `run_fetch_job(session, job_id, *, fetch_start_date, fetch_end_date, max_count, auto_score)` — reads settings, computes effective start date (overridden when `fetch_start_date` is provided), calls `fetch_and_store` with company_domains and optional `end_date`/`max_count`. Runs `build_chains` after fetch to group emails into conversation chains. Runs scoring after chain building when `auto_score` is true, or when `auto_score` is None and the `auto_score_after_fetch` setting is true. Result summary includes `fetched`, `new_reps`, and optionally `scored`, `errors`, `tokens`.
 - `run_score_job(session, job_id)` — reads `scoring_batch_size` from settings, calls `score_unscored_emails`. Result summary includes `scored`, `errors`, `tokens`.
-- `run_rescore_job(session, job_id)` — deletes all existing scores, then calls `score_unscored_emails` to score every email.
+- `run_rescore_job(session, job_id)` — deletes all existing chain_scores and scores, then calls `score_unscored_emails` to score every email and chain. Result summary includes `scored`, `errors`, `tokens`, `chains_scored`, `chain_errors`.
 - `run_export_job(session, job_id, output_path)` — generates Excel via `export_to_excel`, stores path in result summary.
 - `run_chain_build_job(session, job_id)` — calls `build_chains`, stores result summary with `chains_created`, `chains_updated`, and `emails_linked` counts.
 

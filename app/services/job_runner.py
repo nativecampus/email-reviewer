@@ -12,6 +12,7 @@ from app.config import settings as app_config
 from app.models.base import _utcnow
 from app.database import worker_session
 from app.enums import JobStatus, JobType
+from app.models.chain_score import ChainScore
 from app.models.email import Email
 from app.models.job import Job
 from app.models.score import Score
@@ -203,7 +204,8 @@ async def run_rescore_job(
             _set_running(job)
             await s.flush()
 
-            # Delete all existing scores
+            # Delete all existing scores and chain scores
+            await s.execute(delete(ChainScore))
             await s.execute(delete(Score))
             await s.flush()
 
@@ -216,6 +218,8 @@ async def run_rescore_job(
                 "errors": score_result.get("errors", 0),
                 "tokens": score_result.get("total_input_tokens", 0)
                 + score_result.get("total_output_tokens", 0),
+                "chains_scored": score_result.get("chains_scored", 0),
+                "chain_errors": score_result.get("chain_errors", 0),
             }
             _set_completed(job, summary)
             await s.flush()
