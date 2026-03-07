@@ -18,43 +18,6 @@ def _paginate_result(items, total: int, page: int, per_page: int):
     }
 
 
-async def get_chains(session: AsyncSession, page: int = 1, per_page: int = 20) -> dict:
-    """Paginated chains with chain_scores joined, ordered by last_activity_at desc."""
-    count_stmt = select(func.count(EmailChain.id))
-    total = (await session.execute(count_stmt)).scalar() or 0
-
-    stmt = (
-        select(EmailChain)
-        .options(joinedload(EmailChain.chain_score))
-        .order_by(EmailChain.last_activity_at.desc().nullslast())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-    )
-    result = await session.execute(stmt)
-    chains = result.scalars().unique().all()
-
-    items = []
-    for chain in chains:
-        cs = chain.chain_score
-        items.append({
-            "id": chain.id,
-            "normalized_subject": chain.normalized_subject,
-            "participants": chain.participants,
-            "started_at": chain.started_at,
-            "last_activity_at": chain.last_activity_at,
-            "email_count": chain.email_count,
-            "outgoing_count": chain.outgoing_count,
-            "incoming_count": chain.incoming_count,
-            "progression": cs.progression if cs else None,
-            "responsiveness": cs.responsiveness if cs else None,
-            "persistence": cs.persistence if cs else None,
-            "conversation_quality": cs.conversation_quality if cs else None,
-            "avg_response_hours": cs.avg_response_hours if cs else None,
-        })
-
-    return _paginate_result(items, total, page, per_page)
-
-
 async def get_chain_detail(session: AsyncSession, chain_id: int) -> dict | None:
     """Single chain with all emails in timestamp order and chain_score."""
     stmt = (

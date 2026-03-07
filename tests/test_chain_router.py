@@ -1,57 +1,6 @@
 from datetime import datetime
 
 
-class TestGetChains:
-    async def test_returns_200_with_empty_list(self, client):
-        resp = await client.get("/api/chains")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["items"] == []
-        assert data["total"] == 0
-
-    async def test_returns_chain_objects_with_score_fields(
-        self, client, make_chain, make_chain_score
-    ):
-        chain = await make_chain(
-            normalized_subject="Follow up",
-            email_count=3,
-            started_at=datetime(2025, 1, 1),
-            last_activity_at=datetime(2025, 1, 5),
-        )
-        await make_chain_score(
-            chain_id=chain.id,
-            conversation_quality=8,
-            progression=7,
-            responsiveness=6,
-            persistence=5,
-        )
-
-        resp = await client.get("/api/chains")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["items"]) == 1
-        item = data["items"][0]
-        assert item["normalized_subject"] == "Follow up"
-        assert item["email_count"] == 3
-        assert item["conversation_quality"] == 8
-        assert item["progression"] == 7
-
-    async def test_respects_pagination_params(self, client, make_chain):
-        for i in range(15):
-            await make_chain(
-                normalized_subject=f"Subject {i}",
-                participants=f"a{i}@x.com,b{i}@x.com",
-            )
-
-        resp = await client.get("/api/chains", params={"page": 2, "per_page": 10})
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["page"] == 2
-        assert data["per_page"] == 10
-        assert data["total"] == 15
-        assert len(data["items"]) == 5
-
-
 class TestGetChainDetail:
     async def test_returns_200_with_chain_and_emails(
         self, client, make_chain, make_email, make_chain_score

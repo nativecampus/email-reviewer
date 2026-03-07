@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Rep
-from app.services.chain import get_chain_detail, get_chains, get_rep_chains
+from app.services.chain import get_chain_detail, get_rep_chains
 from app.services.export import export_rep_emails
 from app.services.rep import get_rep_emails, get_team
 from app.templating import templates
@@ -67,33 +67,6 @@ def _parse_int(value: str | None) -> int | None:
     if not value:
         return None
     return int(value)
-
-
-@router.get("/chains", include_in_schema=False)
-async def chains_page(
-    request: Request,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=0),
-    session: AsyncSession = Depends(get_db),
-):
-    effective_per_page = per_page or 20
-    result = await get_chains(session, page=page, per_page=effective_per_page)
-    start = (page - 1) * effective_per_page + 1 if effective_per_page else 1
-    end = start + len(result["items"]) - 1 if result["items"] else 0
-    return templates.TemplateResponse(
-        request,
-        "chains.html",
-        {
-            "chains": result["items"],
-            "score_class": score_class,
-            "page": result["page"],
-            "per_page": per_page,
-            "total": result["total"],
-            "pages": result["pages"],
-            "start": start,
-            "end": end,
-        },
-    )
 
 
 @router.get("/chains/{chain_id}", include_in_schema=False)

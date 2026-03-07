@@ -264,8 +264,7 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 | `GET /` | Team page — rep table with colour-coded average scores, links to rep detail. Accepts `?page=1&per_page=20` query params for pagination. `per_page=0` returns all results. |
 | `GET /reps/{rep_email}` | Rep detail page — scored email list with expandable body preview, plus a Chains section showing the rep's conversation chains. Accepts `?page=1&per_page=20` query params for pagination. `per_page=0` returns all results. Also accepts `?search=`, `?date_from=YYYY-MM-DD`, `?date_to=YYYY-MM-DD`, `?score_min=1..10`, `?score_max=1..10` for filtering. Filters apply via ILIKE on subject/body, inclusive date range on timestamp, and inclusive range on overall score. |
 | `GET /reps/{rep_email}/export` | Downloads an Excel (.xlsx) file of the rep's scored emails. Accepts the same filter query params as the detail page plus `?export_all=true` to ignore filters and include all emails. |
-| `GET /chains` | Chain list page — table of conversation chains with subject, email count, date range, outgoing/incoming counts, and colour-coded chain score badges. Accepts `?page=1&per_page=20` for pagination. Links to chain detail. |
-| `GET /chains/{chain_id}` | Chain detail page — full conversation thread in chronological order. Each email shows direction, sender, recipient, timestamp, subject, body preview, and individual score. Chain score panel at top with all 4 dimensions and avg_response_hours. |
+| `GET /chains/{chain_id}` | Chain detail page — full conversation thread in chronological order. Each email shows direction, sender, recipient, timestamp, subject, body preview, and individual score. Chain score panel at top with all 4 dimensions and avg_response_hours. Accessed from the rep detail page's Chains section. |
 
 ### Settings Page (`app/routers/settings.py`)
 
@@ -280,7 +279,6 @@ HTML views excluded from the OpenAPI schema (`include_in_schema=False`). Rendere
 | `GET /api/reps` | List of `RepTeamRow` objects sorted by overall avg descending. Each object includes `chain_count` and `avg_chain_score` fields. |
 | `GET /api/reps/{rep_email}/emails` | Scored emails for one rep, ordered by date descending |
 | `GET /api/reps/{rep_email}/chains` | Paginated chains where the rep is a sender. Returns `{items, total, page, per_page}`. |
-| `GET /api/chains` | Paginated list of all chains with chain_scores joined, ordered by last_activity_at desc. Returns `{items, total, page, per_page}`. |
 | `GET /api/chains/{chain_id}` | Single chain with all emails in timestamp order and chain_score. Returns 404 if not found. |
 | `GET /api/emails/{email_id}` | Single email with its score detail |
 | `GET /api/stats` | `StatsResponse` with total_emails, total_scored, total_reps, avg_overall |
@@ -319,7 +317,6 @@ Async query functions used by both routers:
 
 Async query functions for chain visibility:
 
-- `get_chains(session, page=1, per_page=20)` — paginated chains with chain_scores joined, ordered by last_activity_at desc. Returns `{items, total, page, per_page, pages}`.
 - `get_chain_detail(session, chain_id)` — single chain with all emails in timestamp order and chain_score. Returns None if not found.
 - `get_rep_chains(session, rep_email, page=1, per_page=20)` — chains where any email has from_email matching rep_email. Same pagination shape.
 

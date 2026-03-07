@@ -93,15 +93,7 @@ class TestRepDetailPage:
         assert resp.status_code == 200
 
 
-class TestChainsPage:
-    async def test_get_chains_returns_200(self, client):
-        resp = await client.get("/chains")
-        assert resp.status_code == 200
-
-    async def test_get_chains_contains_chains_heading(self, client):
-        resp = await client.get("/chains")
-        assert "Chains" in resp.text
-
+class TestChainDetailPage:
     async def test_get_chain_detail_returns_200(
         self, client, make_chain, make_email
     ):

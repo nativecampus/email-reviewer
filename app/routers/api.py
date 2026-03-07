@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.rep import RepTeamRow
 from app.schemas.stats import StatsResponse
-from app.services.chain import get_chain_detail, get_chains, get_rep_chains
+from app.services.chain import get_chain_detail, get_rep_chains
 from app.services.rep import get_email_detail, get_rep_emails, get_stats, get_team
 
 router = APIRouter(prefix="/api")
@@ -60,15 +60,6 @@ async def list_rep_chains(
     session: AsyncSession = Depends(get_db),
 ):
     return await get_rep_chains(session, rep_email, page=page, per_page=per_page)
-
-
-@router.get("/chains")
-async def list_chains(
-    page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1),
-    session: AsyncSession = Depends(get_db),
-):
-    return await get_chains(session, page=page, per_page=per_page)
 
 
 @router.get("/chains/{chain_id}")

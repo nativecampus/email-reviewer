@@ -45,19 +45,6 @@ Paginated chains where the rep is a sender.
 
 ## Chains
 
-### GET /api/chains
-
-Paginated list of all chains with chain_scores joined, ordered by last_activity_at descending.
-
-**Query parameters**:
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| page | integer | 1 | Page number (>= 1) |
-| per_page | integer | 20 | Items per page (>= 1) |
-
-**Response**: Paginated `{items, total, page, per_page}`
-
 ### GET /api/chains/{chain_id}
 
 Single chain with all emails in timestamp order and chain_score.
