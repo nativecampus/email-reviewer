@@ -3,6 +3,8 @@
 ## Project Documentation
 
 - `docs/architecture.md` - system design, data pipeline, database schema, key decisions
+- `docs/data-model.md` - database tables, columns, types, constraints, relationships
+- `docs/api-reference.md` - JSON API endpoints, request/response formats
 - `docs/development.md` - setup, seeding, running tests, migrations, CI/CD, deployment, project structure
 - `docs/coding_standards.md` - patterns and conventions for coding agents
 - `docs/testing-guide.md` - what to test, what not to test, stack-specific guidance

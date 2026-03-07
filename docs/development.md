@@ -127,7 +127,18 @@ The CI database URL is set to the PostgreSQL service container. Tests themselves
 
 ## Background Jobs
 
-Operations (fetch, score, rescore, export) run as background jobs. The app supports two modes:
+Operations run as background jobs. The app supports two modes:
+
+### Available Operations
+
+| Operation | API Endpoint | Description |
+|-----------|-------------|-------------|
+| Fetch | `POST /api/operations/fetch` | Fetch emails from HubSpot. Runs chain builder after fetch. Optionally scores afterward. |
+| Score | `POST /api/operations/score` | Score unscored emails and chains via Claude API. |
+| Rescore | `POST /api/operations/rescore` | Delete all scores and re-score every email and chain. |
+| Export | `POST /api/operations/export` | Generate Excel workbook of scored emails and rep averages. |
+| Rebuild Chains | `POST /api/operations/chain-build` | Rebuild conversation chains from email threading data. |
+| Score Chains | Included in Score/Rescore | Chain-level scoring runs automatically after individual email scoring. |
 
 ### Default: In-Process (No Redis)
 
@@ -179,6 +190,28 @@ The app deploys to Heroku with a web dyno and an optional worker dyno.
 - **Migrations**: Run `heroku run alembic upgrade head` after deploying schema changes
 
 To enable the worker dyno: `heroku ps:scale worker=1`. Without it (or without `REDIS_URL`), operations run in-process on the web dyno.
+
+## Chain Builder
+
+The chain builder groups emails into conversation threads. It runs automatically after every fetch operation and can be triggered manually via `POST /api/operations/chain-build`.
+
+The algorithm uses three matching passes in priority order:
+
+1. **Message-ID threading** — links emails where one's `in_reply_to` header matches another's `message_id`.
+2. **Thread-ID grouping** — groups unchained emails sharing the same HubSpot `thread_id`. Does not merge chains already formed by message-ID matching.
+3. **Subject + participant fallback** — groups remaining unchained emails by normalized subject, at least one overlapping participant, and timestamps within 30 days.
+
+The service is idempotent — existing chain assignments are cleared and rebuilt on each run.
+
+## Settings UI
+
+The settings page (`/settings`) uses a tabbed layout with three tabs:
+
+- **General** — `global_start_date`, `company_domains`, `scoring_batch_size`, `auto_score_after_fetch`.
+- **Scoring** — `initial_email_prompt`, `chain_email_prompt`, and score dimension weights (`weight_value_proposition`, `weight_personalisation`, `weight_cta`, `weight_clarity`). Weights must sum to 1.0. "Reset to Default" buttons restore built-in prompts via `GET /api/settings/defaults`.
+- **Chain Evaluation** — `chain_evaluation_prompt` for conversation-level scoring.
+
+All tab content is rendered server-side; JavaScript toggles visibility. The `?tab=` query parameter selects the active tab.
 
 ## Project Structure
 
@@ -242,6 +275,8 @@ email-reviewer/
 │   └── versions/             # Migration files
 ├── docs/                     # Project documentation
 │   ├── architecture.md       # System architecture and design decisions
+│   ├── data-model.md         # Database tables, columns, types, constraints, relationships
+│   ├── api-reference.md      # JSON API endpoints, request/response formats
 │   ├── coding_standards.md   # Patterns and conventions for coding agents
 │   ├── development.md        # Setup, seeding, running tests, CI/CD, deployment
 │   ├── testing-guide.md      # What to test and what not to test
