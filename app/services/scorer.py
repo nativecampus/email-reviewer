@@ -15,7 +15,12 @@ from app.models.chain import EmailChain
 from app.models.chain_score import ChainScore
 from app.models.email import Email
 from app.models.score import Score
-from app.models.settings import Settings
+from app.models.settings import (
+    DEFAULT_CHAIN_EMAIL_PROMPT,
+    DEFAULT_CHAIN_EVALUATION_PROMPT,
+    DEFAULT_INITIAL_EMAIL_PROMPT,
+    Settings,
+)
 from app.schemas.chain_score import ChainScoringResult
 from app.schemas.score import ScoringResult
 from app.services.settings import get_settings
@@ -158,7 +163,7 @@ async def _call_claude_with_retry(
             response = await client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=300,
-                system=system_prompt,
+                system=[{"type": "text", "text": system_prompt}],
                 messages=[{"role": "user", "content": user_message}],
             )
             total_tokens["input"] += response.usage.input_tokens
@@ -197,11 +202,11 @@ async def _score_single_email(
 
     user_message = _build_user_message(email)
 
-    # Choose prompt based on chain position
+    # Choose prompt based on chain position, falling back to defaults
     if email.chain_id is not None and (email.position_in_chain or 0) > 1:
-        system_prompt = settings.chain_email_prompt
+        system_prompt = settings.chain_email_prompt or DEFAULT_CHAIN_EMAIL_PROMPT
     else:
-        system_prompt = settings.initial_email_prompt
+        system_prompt = settings.initial_email_prompt or DEFAULT_INITIAL_EMAIL_PROMPT
 
     async with semaphore:
         for _attempt in range(2):
@@ -419,7 +424,7 @@ async def score_unscored_chains(
                 response = await client.messages.create(
                     model="claude-sonnet-4-20250514",
                     max_tokens=300,
-                    system=settings.chain_evaluation_prompt,
+                    system=[{"type": "text", "text": settings.chain_evaluation_prompt or DEFAULT_CHAIN_EVALUATION_PROMPT}],
                     messages=[{"role": "user", "content": conversation_text}],
                 )
                 total_tokens["input"] += response.usage.input_tokens
