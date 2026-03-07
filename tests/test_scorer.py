@@ -137,7 +137,7 @@ class TestPromptLoading:
         await _score_single_email(mock_client, email, semaphore, settings)
 
         call_kwargs = mock_client.messages.create.call_args
-        assert call_kwargs.kwargs["system"] == "Custom initial prompt"
+        assert call_kwargs.kwargs["system"] == [{"type": "text", "text": "Custom initial prompt"}]
 
     async def test_uses_chain_prompt_for_followup_email(self, db, make_email, make_chain, make_settings):
         settings = await make_settings(chain_email_prompt="Custom chain prompt")
@@ -171,7 +171,7 @@ class TestPromptLoading:
         await _score_single_email(mock_client, email, semaphore, settings)
 
         call_kwargs = mock_client.messages.create.call_args
-        assert call_kwargs.kwargs["system"] == "Custom chain prompt"
+        assert call_kwargs.kwargs["system"] == [{"type": "text", "text": "Custom chain prompt"}]
 
 
 class TestBuildUserMessage:
@@ -638,7 +638,7 @@ class TestScoreUnscoredChains:
             result = await score_unscored_chains(db)
 
         call_kwargs = mock_client_instance.messages.create.call_args
-        assert call_kwargs.kwargs["system"] == "Custom chain eval prompt"
+        assert call_kwargs.kwargs["system"] == [{"type": "text", "text": "Custom chain eval prompt"}]
 
     async def test_sets_score_error_after_two_parse_failures(self, db, make_chain, make_email, make_settings):
         settings = await make_settings()
